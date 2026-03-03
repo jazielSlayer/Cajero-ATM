@@ -1,0 +1,23 @@
+@api = http://localhost:3700
+
+###
+POST {{api}}/crear/usuario
+Content-Type: application/json
+
+{
+    "nombre": "Juan Perez",
+    "apellido": "Garcia",
+    "direccion": "Calle Falsa 123",
+    "telefono": "555-1234",
+    "edad": 30,
+    "correo": "juan.perez@example.com",
+    "contrasena": "contrasena123",
+    "id_rol": 1,
+    "numero_cuenta": "1234567890",
+    "tipo_cuenta": "ahorro",
+    "saldo_inicial": 1000.00,
+    "numero_tarjeta": "9876543210",
+    "pin": "1234",
+    "tipo_tarjeta": "debito",
+    "fecha_vencimiento": "2025-12-31"
+}
