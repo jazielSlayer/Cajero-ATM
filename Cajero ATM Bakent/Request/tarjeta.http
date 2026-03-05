@@ -1,0 +1,11 @@
+@api = http://localhost:3700
+
+### ✅ Así debe estar (sin espacios después de la URL, un solo salto antes del body)
+PUT {{api}}/cambiar/estado/tarjeta
+Content-Type: application/json
+
+{  
+    "tarjeta_id": 4,  
+    "usuario_id": 6,  
+    "nuevo_estado": "activa"  
+}

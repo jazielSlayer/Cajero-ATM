@@ -1,10 +1,12 @@
 import { Router } from "express"; 
-import { realizarRetiro, realizarTransferencia, getTransaccionesUsuario } from "../controlers/transacciones";
+import { realizarRetiro, realizarTransferencia, getTransaccionesUsuario, realizarDeposito } from "../controlers/transacciones";
 
 const router = Router();
 
 // listado de usuarios con información completa
-router.get("/retiro", realizarRetiro);
+router.post("/retiro", realizarRetiro);
+
+router.post("/deposito", realizarDeposito);
 
 // realizar transferencia
 router.post("/transferencia", realizarTransferencia);

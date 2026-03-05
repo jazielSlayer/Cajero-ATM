@@ -27,6 +27,32 @@ export const realizarRetiro = async (req, res) => {
     }
 };
 
+export const realizarDeposito = async (req, res) => {
+    const connection = await connect();
+    const { correo, monto, metodo, contrasena, pin } = req.body; // ✅ correo en vez de cuenta_id
+
+    try {
+        await connection.query('SET @transaccion_id = 0;');
+        await connection.query("SET @mensaje = '';");
+
+        await connection.query(
+            'CALL sp_realizar_deposito(?, ?, ?, ?, ?, @transaccion_id, @mensaje)',
+            [correo, monto, metodo, contrasena, pin]
+        );
+
+        const [[output]] = await connection.query(
+            'SELECT @transaccion_id AS transaccion_id, @mensaje AS mensaje'
+        );
+
+        if (output.transaccion_id === -1)
+            return res.status(400).json({ error: output.mensaje });
+
+        res.json({ transaccionId: output.transaccion_id, mensaje: output.mensaje });
+    } catch (err) {
+        console.error('Error al realizar depósito:', err);
+        res.status(500).json({ error: 'Error interno al realizar depósito' });
+    }
+};
 
 export const realizarTransferencia = async (req, res) => {
     const connection = await connect();
@@ -58,18 +84,17 @@ export const realizarTransferencia = async (req, res) => {
 
 export const getTransaccionesUsuario = async (req, res) => {
     const connection = await connect();
-    const { usuario_id } = req.params;
-    const { fecha_inicio, fecha_fin, tipo_transaccion, limite } = req.query;
+    const { usuario_id, fecha_inicio, fecha_fin, tipo_transaccion, limite } = req.query; // ✅ req.query
 
     try {
         const [rows] = await connection.query(
             'CALL sp_transacciones_usuario(?, ?, ?, ?, ?)',
             [
-                usuario_id,
-                fecha_inicio    || null,
-                fecha_fin       || null,
-                tipo_transaccion ? parseInt(tipo_transaccion) : null,
-                limite          ? parseInt(limite) : null
+                usuario_id        ? parseInt(usuario_id) : null,
+                fecha_inicio      || null,
+                fecha_fin         || null,
+                tipo_transaccion  ? parseInt(tipo_transaccion) : null,
+                limite            ? parseInt(limite) : null
             ]
         );
 

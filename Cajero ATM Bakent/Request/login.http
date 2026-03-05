@@ -1,0 +1,10 @@
+@api = http://localhost:3700
+
+###
+### ✅ Así debe estar (con línea en blanco obligatoria)
+POST {{api}}/login
+Content-Type: application/json
+
+{
+    "correo": "jazielarmandovargaschoque@gmail.com"
+}

@@ -1,0 +1,38 @@
+@api = http://localhost:3700
+
+### Realizar Retiro
+POST {{api}}/retiro
+Content-Type: application/json
+
+{
+    "cuenta_id": 1,
+    "monto": 50.00,
+    "metodo": "ATM"
+}
+
+### Realizar Transferencia
+POST {{api}}/transferencia
+Content-Type: application/json
+
+{
+    "cuenta_origen_id": 1,
+    "cuenta_destino_id": 2,
+    "monto": 50.00,
+    "metodo": "web",
+    "descripcion": "Pago de deuda"
+}
+
+### Realizar Depósito
+POST {{api}}/deposito
+Content-Type: application/json
+
+{
+    "correo": "jazielarmandovargaschoque@gmail.com",
+    "monto": 100000000000000000.00,
+    "metodo": "ATM",
+    "contrasena": "DrXeno79TESLA",
+    "pin": "777"
+}
+
+### Obtener Transacciones de un Usuario
+GET {{api}}/transacciones/usuario?usuario_id=1&fecha_inicio=2026-01-01&fecha_fin=2026-12-31&tipo_transaccion=1&limite=10

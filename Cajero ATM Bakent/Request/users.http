@@ -5,19 +5,19 @@ POST {{api}}/crear/usuario
 Content-Type: application/json
 
 {
-    "nombre": "Juan Perez",
-    "apellido": "Garcia",
+    "nombre": "Jaziel Armando",
+    "apellido": "Vargas cHoque",
     "direccion": "Calle Falsa 123",
-    "telefono": "555-1234",
-    "edad": 30,
-    "correo": "juan.perez@example.com",
-    "contrasena": "contrasena123",
+    "telefono": "8929202",
+    "edad": 21,
+    "correo": "jazielarmandovargaschoque@gmail.com",
+    "contrasena": "DrXeno79TESLA",
     "id_rol": 1,
-    "numero_cuenta": "1234567890",
+    "numero_cuenta": "01872812992",
     "tipo_cuenta": "ahorro",
     "saldo_inicial": 1000.00,
-    "numero_tarjeta": "9876543210",
-    "pin": "1234",
+    "numero_tarjeta": "1000282973",
+    "pin": "777",
     "tipo_tarjeta": "debito",
     "fecha_vencimiento": "2025-12-31"
 }

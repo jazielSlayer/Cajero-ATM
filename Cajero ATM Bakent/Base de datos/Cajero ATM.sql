@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 03-03-2026 a las 19:14:21
+-- Tiempo de generación: 05-03-2026 a las 01:10:37
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.1.25
 
@@ -113,6 +113,101 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_estado_cuenta` (IN `p_usuario_id
     WHERE usuario_id = p_usuario_id
     ORDER BY Fecha_transaccion DESC
     LIMIT 5;
+END$$
+
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito` (IN `p_correo` VARCHAR(150), IN `p_monto` DECIMAL(15,2), IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_contrasena` VARCHAR(255), IN `p_pin` VARCHAR(255), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
+    DECLARE v_cuenta_id     INT;
+    DECLARE v_saldo         DECIMAL(15,2);
+    DECLARE v_estado_cuenta VARCHAR(20);
+    DECLARE v_usuario_id    INT;
+    DECLARE v_contrasena_bd VARCHAR(255);
+    DECLARE v_pin_bd        VARCHAR(255);
+    DECLARE v_estado_usuario VARCHAR(20);
+    DECLARE v_estado_tarjeta VARCHAR(20);
+    DECLARE v_tipo_deposito INT;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SET p_transaccion_id = -1;
+        SET p_mensaje = 'Error interno: Depósito cancelado.';
+    END;
+
+    -- Obtener usuario por correo
+    SELECT u.ID, u.Contrasena, u.Estado
+    INTO v_usuario_id, v_contrasena_bd, v_estado_usuario
+    FROM Users u
+    WHERE u.Correo = p_correo
+    LIMIT 1;
+
+    -- Validar usuario existe
+    IF v_usuario_id IS NULL THEN
+        SET p_transaccion_id = -1;
+        SET p_mensaje = 'Error: Usuario no encontrado.';
+
+    ELSEIF v_estado_usuario != 'activo' THEN
+        SET p_transaccion_id = -1;
+        SET p_mensaje = 'Error: El usuario no está activo.';
+
+    ELSEIF v_contrasena_bd != p_contrasena THEN
+        SET p_transaccion_id = -1;
+        SET p_mensaje = 'Error: Contraseña incorrecta.';
+
+    ELSE
+        -- Obtener cuenta activa del usuario
+        SELECT ID, Saldo, Estado
+        INTO v_cuenta_id, v_saldo, v_estado_cuenta
+        FROM Cuenta
+        WHERE ID_Users = v_usuario_id AND Estado = 'activa'
+        LIMIT 1;
+
+        -- Obtener PIN de la tarjeta asociada
+        SELECT Pin, Estado
+        INTO v_pin_bd, v_estado_tarjeta
+        FROM Tarjeta
+        WHERE ID_Cuenta = v_cuenta_id AND Estado = 'activa'
+        LIMIT 1;
+
+        -- Obtener tipo depósito
+        SELECT ID INTO v_tipo_deposito
+        FROM Tipo_Transaccion WHERE Nombre = 'Deposito';
+
+        IF v_cuenta_id IS NULL THEN
+            SET p_transaccion_id = -1;
+            SET p_mensaje = 'Error: No se encontró una cuenta activa.';
+
+        ELSEIF v_pin_bd IS NULL THEN
+            SET p_transaccion_id = -1;
+            SET p_mensaje = 'Error: No se encontró una tarjeta activa.';
+
+        ELSEIF v_pin_bd != p_pin THEN
+            SET p_transaccion_id = -1;
+            SET p_mensaje = 'Error: PIN incorrecto.';
+
+        ELSEIF p_monto <= 0 THEN
+            SET p_transaccion_id = -1;
+            SET p_mensaje = 'Error: El monto debe ser mayor a 0.';
+
+        ELSE
+            START TRANSACTION;
+
+            UPDATE Cuenta
+            SET Saldo = Saldo + p_monto
+            WHERE ID = v_cuenta_id;
+
+            INSERT INTO Transacciones (
+                ID_Cuenta_Transfiere, ID_Tipo_Transaccion, Monto,
+                Saldo_anterior, Saldo_posterior, Metodo_transaccion, Estado
+            ) VALUES (
+                v_cuenta_id, v_tipo_deposito, p_monto,
+                v_saldo, (v_saldo + p_monto), p_metodo, 'exitosa'
+            );
+
+            SET p_transaccion_id = LAST_INSERT_ID();
+            COMMIT;
+            SET p_mensaje = CONCAT('Depósito exitoso. Nuevo saldo: ', (v_saldo + p_monto));
+        END IF;
+    END IF;
 END$$
 
 CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro` (IN `p_cuenta_id` INT, IN `p_monto` DECIMAL(15,2), IN `p_metodo` ENUM('ATM','web','app_movil'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
@@ -310,8 +405,10 @@ CREATE TABLE `cuenta` (
 --
 
 INSERT INTO `cuenta` (`ID`, `Numero_cuenta`, `ID_Users`, `Tipo_cuenta`, `Saldo`, `Estado`, `Fecha_creacion`, `Fecha_modificacion`) VALUES
-(1, '1000200030004001', 1, 'ahorro', 200.00, 'activa', '2026-03-02 20:28:14', '2026-03-02 21:25:40'),
-(2, '3454321234321', 4, 'corriente', 1000000.00, 'activa', '2026-03-02 22:09:52', '2026-03-02 22:09:52');
+(1, '1000200030004001', 1, 'ahorro', 0.00, 'activa', '2026-03-02 20:28:14', '2026-03-04 19:27:42'),
+(2, '3454321234321', 4, 'corriente', 1000050.00, 'activa', '2026-03-02 22:09:52', '2026-03-04 19:27:42'),
+(3, '1234567890', 5, 'ahorro', 1000.00, 'activa', '2026-03-03 14:18:40', '2026-03-03 14:18:40'),
+(4, '01872812992', 6, 'ahorro', 9999999999999.99, 'activa', '2026-03-04 19:02:28', '2026-03-04 20:04:24');
 
 -- --------------------------------------------------------
 
@@ -336,7 +433,9 @@ CREATE TABLE `persona` (
 
 INSERT INTO `persona` (`ID`, `Nombre`, `Apellido`, `Direccion`, `Telefono`, `Edad`, `Fecha_creacion`, `Fecha_modificacion`) VALUES
 (1, 'Juan', 'Pérez', 'Av. Siempre Viva 123', '70012345', 28, '2026-03-02 20:28:14', '2026-03-02 20:28:14'),
-(4, 'Jaziel', 'Vargas', 'limanipata', '34414', 1441, '2026-03-02 22:09:52', '2026-03-02 22:09:52');
+(4, 'Jaziel', 'Vargas', 'limanipata', '34414', 1441, '2026-03-02 22:09:52', '2026-03-02 22:09:52'),
+(5, 'Juan Perez', 'Garcia', 'Calle Falsa 123', '555-1234', 30, '2026-03-03 14:18:40', '2026-03-03 14:18:40'),
+(6, 'Jaziel Armando', 'Vargas cHoque', 'Calle Falsa 123', '8929202', 21, '2026-03-04 19:02:28', '2026-03-04 19:02:28');
 
 -- --------------------------------------------------------
 
@@ -402,7 +501,9 @@ CREATE TABLE `tarjeta` (
 
 INSERT INTO `tarjeta` (`ID`, `ID_Users`, `ID_Cuenta`, `Numero_tarjeta`, `Pin`, `Tipo_tarjeta`, `Estado`, `Fecha_vencimiento`, `Fecha_creacion`, `Fecha_modificacion`) VALUES
 (1, 1, 1, '4111111111111111', '$2b$10$hashpindelbackend', 'debito', 'activa', '2028-12-31', '2026-03-02 20:28:14', '2026-03-02 20:28:14'),
-(2, 4, 2, '123454321|12354', '1221', 'credito', 'activa', '0000-00-00', '2026-03-02 22:09:52', '2026-03-02 22:09:52');
+(2, 4, 2, '123454321|12354', '1221', 'credito', 'activa', '0000-00-00', '2026-03-02 22:09:52', '2026-03-02 22:09:52'),
+(3, 5, 3, '9876543210', '1234', 'debito', 'activa', '2025-12-31', '2026-03-03 14:18:40', '2026-03-03 14:18:40'),
+(4, 6, 4, '1000282973', '777', 'debito', 'activa', '2025-12-31', '2026-03-04 19:02:28', '2026-03-04 20:00:54');
 
 -- --------------------------------------------------------
 
@@ -454,7 +555,12 @@ CREATE TABLE `transacciones` (
 --
 
 INSERT INTO `transacciones` (`ID`, `ID_Cuenta_Transfiere`, `ID_Cuenta_Transferida`, `ID_Tipo_Transaccion`, `Monto`, `Saldo_anterior`, `Saldo_posterior`, `Metodo_transaccion`, `Estado`, `Descripcion`, `Fecha_transaccion`, `Fecha_creacion`, `Fecha_modificacion`) VALUES
-(1, 1, NULL, 1, 300.00, 500.00, 200.00, 'web', 'exitosa', NULL, '2026-03-02 21:25:40', '2026-03-02 21:25:40', '2026-03-02 21:25:40');
+(1, 1, NULL, 1, 300.00, 500.00, 200.00, 'web', 'exitosa', NULL, '2026-03-02 21:25:40', '2026-03-02 21:25:40', '2026-03-02 21:25:40'),
+(2, 1, NULL, 1, 100.00, 200.00, 100.00, 'ATM', 'exitosa', NULL, '2026-03-04 19:20:42', '2026-03-04 19:20:42', '2026-03-04 19:20:42'),
+(3, 1, NULL, 1, 50.00, 100.00, 50.00, 'ATM', 'exitosa', NULL, '2026-03-04 19:26:55', '2026-03-04 19:26:55', '2026-03-04 19:26:55'),
+(4, 1, 2, 3, 50.00, 50.00, 0.00, 'web', 'exitosa', 'Pago de deuda', '2026-03-04 19:27:42', '2026-03-04 19:27:42', '2026-03-04 19:27:42'),
+(6, 4, NULL, 2, 50000000000.00, 1000.00, 50000001000.00, 'web', 'exitosa', NULL, '2026-03-04 20:01:22', '2026-03-04 20:01:22', '2026-03-04 20:01:22'),
+(7, 4, NULL, 2, 9999999999999.99, 50000001000.00, 9999999999999.99, 'ATM', 'exitosa', NULL, '2026-03-04 20:04:24', '2026-03-04 20:04:24', '2026-03-04 20:04:24');
 
 -- --------------------------------------------------------
 
@@ -479,7 +585,9 @@ CREATE TABLE `users` (
 
 INSERT INTO `users` (`ID`, `ID_Persona`, `ID_Rol`, `Correo`, `Contrasena`, `Estado`, `Fecha_creacion`, `Fecha_modificacion`) VALUES
 (1, 1, 2, 'juan.perez@mail.com', '$2b$10$hashbcryptdelbackend', 'activo', '2026-03-02 20:28:14', '2026-03-02 20:28:14'),
-(4, 4, 1, 'qkoqjsioqijs@gamsmma', '1234', 'activo', '2026-03-02 22:09:52', '2026-03-02 22:09:52');
+(4, 4, 1, 'qkoqjsioqijs@gamsmma', '1234', 'activo', '2026-03-02 22:09:52', '2026-03-02 22:09:52'),
+(5, 5, 1, 'juan.perez@example.com', 'contrasena123', 'activo', '2026-03-03 14:18:40', '2026-03-03 14:18:40'),
+(6, 6, 1, 'jazielarmandovargaschoque@gmail.com', 'DrXeno79TESLA', 'activo', '2026-03-04 19:02:28', '2026-03-04 19:02:28');
 
 -- --------------------------------------------------------
 
@@ -545,6 +653,7 @@ CREATE TABLE `vista_sesiones_activas` (
 --
 CREATE TABLE `vista_transacciones_completo` (
 `transaccion_id` int(11)
+,`ID_Tipo_Transaccion` int(11)
 ,`Fecha_transaccion` datetime
 ,`Monto` decimal(15,2)
 ,`Saldo_anterior` decimal(15,2)
@@ -618,7 +727,7 @@ CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW 
 --
 DROP TABLE IF EXISTS `vista_transacciones_completo`;
 
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `vista_transacciones_completo`  AS SELECT `t`.`ID` AS `transaccion_id`, `t`.`Fecha_transaccion` AS `Fecha_transaccion`, `t`.`Monto` AS `Monto`, `t`.`Saldo_anterior` AS `Saldo_anterior`, `t`.`Saldo_posterior` AS `Saldo_posterior`, `t`.`Metodo_transaccion` AS `Metodo_transaccion`, `t`.`Estado` AS `estado_transaccion`, `t`.`Descripcion` AS `Descripcion`, `tt`.`Nombre` AS `tipo_transaccion`, `co`.`Numero_cuenta` AS `cuenta_origen`, `co`.`Tipo_cuenta` AS `tipo_cuenta_origen`, `uo`.`ID` AS `usuario_id`, concat(`po`.`Nombre`,' ',`po`.`Apellido`) AS `nombre_remitente`, `uo`.`Correo` AS `correo_remitente`, `cd`.`Numero_cuenta` AS `cuenta_destino`, concat(`pd`.`Nombre`,' ',`pd`.`Apellido`) AS `nombre_destinatario`, `ud`.`Correo` AS `correo_destinatario` FROM (((((((`transacciones` `t` join `tipo_transaccion` `tt` on(`t`.`ID_Tipo_Transaccion` = `tt`.`ID`)) join `cuenta` `co` on(`t`.`ID_Cuenta_Transfiere` = `co`.`ID`)) join `users` `uo` on(`co`.`ID_Users` = `uo`.`ID`)) join `persona` `po` on(`uo`.`ID_Persona` = `po`.`ID`)) left join `cuenta` `cd` on(`t`.`ID_Cuenta_Transferida` = `cd`.`ID`)) left join `users` `ud` on(`cd`.`ID_Users` = `ud`.`ID`)) left join `persona` `pd` on(`ud`.`ID_Persona` = `pd`.`ID`)) ;
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `vista_transacciones_completo`  AS SELECT `t`.`ID` AS `transaccion_id`, `t`.`ID_Tipo_Transaccion` AS `ID_Tipo_Transaccion`, `t`.`Fecha_transaccion` AS `Fecha_transaccion`, `t`.`Monto` AS `Monto`, `t`.`Saldo_anterior` AS `Saldo_anterior`, `t`.`Saldo_posterior` AS `Saldo_posterior`, `t`.`Metodo_transaccion` AS `Metodo_transaccion`, `t`.`Estado` AS `estado_transaccion`, `t`.`Descripcion` AS `Descripcion`, `tt`.`Nombre` AS `tipo_transaccion`, `co`.`Numero_cuenta` AS `cuenta_origen`, `co`.`Tipo_cuenta` AS `tipo_cuenta_origen`, `uo`.`ID` AS `usuario_id`, concat(`po`.`Nombre`,' ',`po`.`Apellido`) AS `nombre_remitente`, `uo`.`Correo` AS `correo_remitente`, `cd`.`Numero_cuenta` AS `cuenta_destino`, concat(`pd`.`Nombre`,' ',`pd`.`Apellido`) AS `nombre_destinatario`, `ud`.`Correo` AS `correo_destinatario` FROM (((((((`transacciones` `t` join `tipo_transaccion` `tt` on(`t`.`ID_Tipo_Transaccion` = `tt`.`ID`)) join `cuenta` `co` on(`t`.`ID_Cuenta_Transfiere` = `co`.`ID`)) join `users` `uo` on(`co`.`ID_Users` = `uo`.`ID`)) join `persona` `po` on(`uo`.`ID_Persona` = `po`.`ID`)) left join `cuenta` `cd` on(`t`.`ID_Cuenta_Transferida` = `cd`.`ID`)) left join `users` `ud` on(`cd`.`ID_Users` = `ud`.`ID`)) left join `persona` `pd` on(`ud`.`ID_Persona` = `pd`.`ID`)) ;
 
 -- --------------------------------------------------------
 
@@ -708,13 +817,13 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT de la tabla `cuenta`
 --
 ALTER TABLE `cuenta`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT de la tabla `persona`
 --
 ALTER TABLE `persona`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT de la tabla `rol`
@@ -732,7 +841,7 @@ ALTER TABLE `sesion_atm`
 -- AUTO_INCREMENT de la tabla `tarjeta`
 --
 ALTER TABLE `tarjeta`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT de la tabla `tipo_transaccion`
@@ -744,13 +853,13 @@ ALTER TABLE `tipo_transaccion`
 -- AUTO_INCREMENT de la tabla `transacciones`
 --
 ALTER TABLE `transacciones`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT de la tabla `users`
 --
 ALTER TABLE `users`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- Restricciones para tablas volcadas
