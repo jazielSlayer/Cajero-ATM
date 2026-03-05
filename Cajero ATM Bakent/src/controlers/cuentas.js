@@ -2,12 +2,12 @@ import { connect } from "../database.js";
 
 export const getCuentasUsuario = async (req, res) => {
     const connection = await connect();
-    const { usuario_id } = req.params;
+    const { nombre } = req.body;
 
     try {
         const [rows] = await connection.query(
             'CALL sp_cuentas_usuario(?)',
-            [usuario_id]
+            [nombre]
         );
 
         res.json(rows[0]);
@@ -19,12 +19,12 @@ export const getCuentasUsuario = async (req, res) => {
 
 export const getEstadoCuenta = async (req, res) => {
     const connection = await connect();
-    const { usuario_id } = req.params;
+    const { nombre_completo } = req.body;
 
     try {
         const [results] = await connection.query(
             'CALL sp_estado_cuenta(?)',
-            [usuario_id]
+            [nombre_completo]
         );
 
         // El SP devuelve 3 result sets: info usuario, cuentas, últimas 5 transacciones

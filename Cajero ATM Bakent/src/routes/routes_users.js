@@ -1,5 +1,5 @@
 import { Router } from "express"; 
-import { getUsuariosCompleto, createUser } from "../controlers/users";
+import { DatosUsuario, getUsuariosCompleto, createUser } from "../controlers/users";
 
 const router = Router();
 
@@ -8,5 +8,7 @@ router.get("/usuarios/completo", getUsuariosCompleto);
 
 // crear nuevo usuario mediante procedimiento almacenado
 router.post("/crear/usuario", createUser);
+
+router.post("/usuario/datos", DatosUsuario)
 
 export default router;

@@ -12,6 +12,6 @@ router.post("/deposito", realizarDeposito);
 router.post("/transferencia", realizarTransferencia);
 
 // obtener transacciones de un usuario
-router.get("/transacciones/usuario", getTransaccionesUsuario);
+router.post("/transacciones/usuario", getTransaccionesUsuario);
 
 export default router;

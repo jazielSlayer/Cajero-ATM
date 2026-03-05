@@ -5,7 +5,7 @@ PUT {{api}}/cambiar/estado/tarjeta
 Content-Type: application/json
 
 {  
-    "tarjeta_id": 4,  
-    "usuario_id": 6,  
+    "pin": "777",  
+    "nombre_completo": "Jaziel Armando Vargas cHoque",  
     "nuevo_estado": "activa"  
 }

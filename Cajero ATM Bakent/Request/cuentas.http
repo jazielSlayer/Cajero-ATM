@@ -1,0 +1,18 @@
+@api = http://localhost:3700
+
+###
+### ✅ Así debe estar (con línea en blanco obligatoria)
+POST {{api}}/cuentas/usuario
+Content-Type: application/json
+
+{
+    "nombre": "Jaziel Armando Vargas cHoque "
+}
+
+###
+POST {{api}}/estado/cuenta/usuario
+Content-Type: application/json
+
+{
+    "nombre_completo": "Jaziel Armando Vargas cHoque "
+}

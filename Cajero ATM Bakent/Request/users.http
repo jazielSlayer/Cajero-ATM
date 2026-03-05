@@ -2,6 +2,15 @@
 
 ###
 GET {{api}}/usuarios/completo
+
+###
+POST {{api}}/usuario/datos
+Content-Type: application/json
+
+{
+    "nombre_completo": "Jaziel Armando Vargas cHoque"
+}
+
 ###
 POST {{api}}/crear/usuario
 Content-Type: application/json

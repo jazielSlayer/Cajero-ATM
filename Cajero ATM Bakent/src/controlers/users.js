@@ -42,3 +42,23 @@ export const createUser = async (req, res) => {
         res.status(500).json({ error: 'Error interno al intentar crear el usuario' });
     }
 };
+
+export const DatosUsuario = async (req, res) => {
+    const connection = await connect();
+    const { nombre_completo } = req.body;
+
+    try {
+        const [rows] = await connection.query(
+            'CALL sp_datos_usuario_por_nombre(?)',
+            [nombre_completo]
+        );
+
+        const datosUsuario = rows[0]?.[0];
+        if (!datosUsuario) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+        res.json(datosUsuario);
+    } catch (err) {
+        console.error('Error en login:', err);
+        res.status(500).json({ error: 'Error interno en el login' });
+    }
+};

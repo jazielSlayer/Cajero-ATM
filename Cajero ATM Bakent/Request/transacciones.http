@@ -5,7 +5,7 @@ POST {{api}}/retiro
 Content-Type: application/json
 
 {
-    "cuenta_id": 1,
+    "pin": 777,
     "monto": 50.00,
     "metodo": "ATM"
 }
@@ -15,11 +15,11 @@ POST {{api}}/transferencia
 Content-Type: application/json
 
 {
-    "cuenta_origen_id": 1,
-    "cuenta_destino_id": 2,
-    "monto": 50.00,
+    "numero_de_cuenta": "01872812992",
+    "numero_cuenta_destino": 1000200030004001,
+    "monto": 1000000.00,
     "metodo": "web",
-    "descripcion": "Pago de deuda"
+    "descripcion": "Por que me da pena"
 }
 
 ### Realizar Depósito
@@ -35,4 +35,10 @@ Content-Type: application/json
 }
 
 ### Obtener Transacciones de un Usuario
-GET {{api}}/transacciones/usuario?usuario_id=1&fecha_inicio=2026-01-01&fecha_fin=2026-12-31&tipo_transaccion=1&limite=10
+POST {{api}}/transacciones/usuario
+Content-Type: application/json
+
+{
+    "nombre_completo": "Jaziel Armando Vargas cHoque",
+    "tipo_transaccion": "Transferencia"
+}

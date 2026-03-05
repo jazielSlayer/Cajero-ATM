@@ -2,7 +2,7 @@ import { connect } from "../database.js";
 
 export const realizarRetiro = async (req, res) => {
     const connection = await connect();
-    const { cuenta_id, monto, metodo } = req.body;
+    const { pin, monto, metodo } = req.body;
 
     try {
         await connection.query('SET @transaccion_id = 0;');
@@ -10,7 +10,7 @@ export const realizarRetiro = async (req, res) => {
 
         await connection.query(
             'CALL sp_realizar_retiro(?, ?, ?, @transaccion_id, @mensaje)',
-            [cuenta_id, monto, metodo]
+            [pin, monto, metodo]
         );
 
         const [[output]] = await connection.query(
@@ -56,7 +56,7 @@ export const realizarDeposito = async (req, res) => {
 
 export const realizarTransferencia = async (req, res) => {
     const connection = await connect();
-    const { cuenta_origen_id, cuenta_destino_id, monto, metodo, descripcion } = req.body;
+    const { numero_de_cuenta, numero_cuenta_destino, monto, metodo, descripcion } = req.body;
 
     try {
         await connection.query('SET @transaccion_id = 0;');
@@ -64,7 +64,7 @@ export const realizarTransferencia = async (req, res) => {
 
         await connection.query(
             'CALL sp_realizar_transferencia(?, ?, ?, ?, ?, @transaccion_id, @mensaje)',
-            [cuenta_origen_id, cuenta_destino_id, monto, metodo, descripcion]
+            [numero_de_cuenta, numero_cuenta_destino, monto, metodo, descripcion]
         );
 
         const [[output]] = await connection.query(
@@ -84,17 +84,14 @@ export const realizarTransferencia = async (req, res) => {
 
 export const getTransaccionesUsuario = async (req, res) => {
     const connection = await connect();
-    const { usuario_id, fecha_inicio, fecha_fin, tipo_transaccion, limite } = req.query; // ✅ req.query
+    const { nombre_completo, tipo_transaccion } = req.body; 
 
     try {
         const [rows] = await connection.query(
-            'CALL sp_transacciones_usuario(?, ?, ?, ?, ?)',
+            'CALL sp_transacciones_usuario(?, ?)',
             [
-                usuario_id        ? parseInt(usuario_id) : null,
-                fecha_inicio      || null,
-                fecha_fin         || null,
-                tipo_transaccion  ? parseInt(tipo_transaccion) : null,
-                limite            ? parseInt(limite) : null
+                nombre_completo,
+                tipo_transaccion
             ]
         );
 
