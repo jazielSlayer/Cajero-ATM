@@ -3,12 +3,13 @@ import { connect } from "../database.js";
 
 export const loginUser = async (req, res) => {
     const connection = await connect();
-    const { correo } = req.body;
+    const { contrasena } = req.body;
+    const { pin } = req.body;
 
     try {
         const [rows] = await connection.query(
-            'CALL sp_buscar_usuario_login(?)',
-            [correo]
+            'CALL sp_buscar_usuario_login(?,?)',
+            [contrasena, pin]
         );
 
         const usuario = rows[0]?.[0];

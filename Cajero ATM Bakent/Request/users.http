@@ -1,6 +1,8 @@
 @api = http://localhost:3700
 
 ###
+GET {{api}}/usuarios/completo
+###
 POST {{api}}/crear/usuario
 Content-Type: application/json
 
