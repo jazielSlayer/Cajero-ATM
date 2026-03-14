@@ -16,14 +16,13 @@ POST {{api}}/crear/usuario
 Content-Type: application/json
 
 {
-    "nombre":        "Carlos",
-    "apellido":      "Mamani",
-    "direccion":     "Calle 21 de Enero 456",
-    "telefono":      "76543210",
-    "edad":          25,
-    "correo":        "carlos.mamani@gmail.com",
-    "contrasena":    "MiContrasena123",
-    "numero_tarjeta": "5500112233445566",
-    "tipo_tarjeta":  "debito",
-    "tipo_cuenta":   "ahorro"
+     "nombre": "Carlos",
+    "apellido": "Mamani Choque",
+    "direccion": "Calle 21 de Enero 456",
+    "telefono": "76543210",
+    "edad": 25,
+    "correo": "carlos.prueba@gmail.com",
+    "contrasena": "miPassword123",
+    "tipo_tarjeta": "debito",
+    "tipo_cuenta": "ahorro"
 }

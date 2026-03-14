@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 14-03-2026 a las 20:07:58
+-- Tiempo de generación: 14-03-2026 a las 20:51:23
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.1.25
 
@@ -92,22 +92,27 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_cuentas_usuario` (IN `p_nombre_c
 END$$
 
 CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_datos_usuario_por_nombre` (IN `p_nombre_completo` VARCHAR(201))   BEGIN
-    -- Datos completos del usuario
+    -- Datos completos del usuario con cuenta y tarjeta
     SELECT
-        usuario_id,
-        Correo,
-        estado_usuario,
-        fecha_registro,
-        persona_id,
-        Nombre,
-        Apellido,
-        nombre_completo,
-        Direccion,
-        Telefono,
-        Edad,
-        rol
-    FROM vista_usuarios_completo
-    WHERE nombre_completo = p_nombre_completo
+        vuc.usuario_id,
+        vuc.Correo,
+        vuc.Nombre,
+        vuc.Apellido,
+        vuc.nombre_completo,
+        vuc.Direccion,
+        vuc.Telefono,
+        vuc.Edad,
+        vcr.Numero_cuenta,
+        vcr.Saldo,
+        vcr.estado_cuenta,
+        vcr.Numero_tarjeta,
+        tar.Pin,
+        vcr.Tipo_tarjeta,
+        vcr.Fecha_vencimiento
+    FROM vista_usuarios_completo vuc
+    INNER JOIN vista_cuentas_resumen vcr ON vcr.usuario_id = vuc.usuario_id
+    INNER JOIN Tarjeta tar ON tar.Numero_tarjeta = vcr.Numero_tarjeta
+    WHERE vuc.nombre_completo = p_nombre_completo
     LIMIT 1;
 
     -- Transacciones con info del destinatario/remitente
