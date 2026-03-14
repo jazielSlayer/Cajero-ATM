@@ -5,7 +5,8 @@ POST {{api}}/retiro
 Content-Type: application/json
 
 {
-    "pin": 777,
+    "numero_tarjeta": "1000282973",
+    "pin": "777",
     "monto": 50.00,
     "metodo": "ATM"
 }
@@ -16,7 +17,7 @@ Content-Type: application/json
 
 {
     "numero_de_cuenta": "01872812992",
-    "numero_cuenta_destino": 1000200030004001,
+    "numero_cuenta_destino": "1000200030004001",
     "monto": 1000000.00,
     "metodo": "web",
     "descripcion": "Por que me da pena"
@@ -28,7 +29,8 @@ Content-Type: application/json
 
 {
     "correo": "jazielarmandovargaschoque@gmail.com",
-    "monto": 100000000000000000.00,
+    "numero_tarjeta": "1000282973",
+    "monto": 10000000000000000000000000.00,
     "metodo": "ATM",
     "contrasena": "DrXeno79TESLA",
     "pin": "777"

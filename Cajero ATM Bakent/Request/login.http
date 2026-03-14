@@ -6,6 +6,7 @@ POST {{api}}/login
 Content-Type: application/json
 
 {
+    "numero_tarjeta": "1000282973",
     "contrasena": "DrXeno79TESLA",
     "pin": "777"
 }
