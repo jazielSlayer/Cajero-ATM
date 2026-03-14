@@ -90,6 +90,7 @@ export const createUser = async (req, res) => {
     }
 };
 
+
 export const DatosUsuario = async (req, res) => {
     const connection = await connect();
     const { nombre_completo } = req.body;
@@ -100,12 +101,41 @@ export const DatosUsuario = async (req, res) => {
             [nombre_completo]
         );
 
+        // El procedimiento devuelve 2 result sets
         const datosUsuario = rows[0]?.[0];
+        const transacciones = rows[1] ?? [];
+
         if (!datosUsuario) return res.status(404).json({ error: 'Usuario no encontrado' });
 
-        res.json(datosUsuario);
+        // El PIN hasheado no se puede revertir, se omite de la respuesta
+        const { Pin, ...datosSinPin } = datosUsuario;
+
+        res.json({
+            usuario: {
+                usuario_id:       datosSinPin.usuario_id,
+                correo:           datosSinPin.Correo,
+                nombre:           datosSinPin.Nombre,
+                apellido:         datosSinPin.Apellido,
+                nombre_completo:  datosSinPin.nombre_completo,
+                direccion:        datosSinPin.Direccion,
+                telefono:         datosSinPin.Telefono,
+                edad:             datosSinPin.Edad,
+                cuenta: {
+                    numero_cuenta: datosSinPin.Numero_cuenta,
+                    saldo:         datosSinPin.Saldo,
+                    estado:        datosSinPin.estado_cuenta,
+                },
+                tarjeta: {
+                    numero_tarjeta:    datosSinPin.Numero_tarjeta,
+                    tipo_tarjeta:      datosSinPin.Tipo_tarjeta,
+                    fecha_vencimiento: datosSinPin.Fecha_vencimiento,
+                }
+            },
+            transacciones
+        });
+
     } catch (err) {
-        console.error('Error en login:', err);
-        res.status(500).json({ error: 'Error interno en el login' });
+        console.error('Error en DatosUsuario:', err);
+        res.status(500).json({ error: 'Error interno al obtener datos del usuario' });
     }
 };
