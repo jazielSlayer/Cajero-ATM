@@ -1,15 +1,4 @@
-// services/tasaCambio.js
-// ─────────────────────────────────────────────────────────────────────────────
-//  Obtiene tasas de cambio desde https://bo.dolarapi.com
-//  y las persiste en la tabla tasa_cambio_cache de la BD.
-//
-//  Tasas disponibles:
-//    oficial  → bo.dolarapi.com/v1/dolares/oficial   (USD ↔ BOB oficial BCB)
-//    binance  → bo.dolarapi.com/v1/dolares/binance   (USD ↔ BOB Binance P2P)
-//
-//  Para otras monedas (EUR, BRL, ARS, CLP, PEN, COP) se usa una tabla de
-//  factores aproximados respecto al USD que puede ampliarse con otra API.
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 import { connect } from "../database.js";
 
