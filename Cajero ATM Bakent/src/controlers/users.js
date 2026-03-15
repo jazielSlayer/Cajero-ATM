@@ -3,6 +3,58 @@ import bcrypt from 'bcrypt';
 
 const SALT_ROUNDS = 10;
 
+export const DatosUsuario = async (req, res) => {
+    const connection = await connect();
+    const { nombre_completo } = req.body;
+
+    try {
+        const [rows] = await connection.query(
+            'CALL sp_datos_usuario_por_nombre(?)',
+            [nombre_completo]
+        );
+
+        const datosUsuario  = rows[0]?.[0];
+        const transacciones = rows[1] ?? [];
+
+        if (!datosUsuario) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        const depositos          = transacciones.filter(t => t.tipo_transaccion === 'Deposito');
+        const otrasTransacciones = transacciones.filter(t => t.tipo_transaccion !== 'Deposito');
+
+        return res.json({
+            usuario: {
+                usuario_id:      datosUsuario.usuario_id,
+                correo:          datosUsuario.Correo,
+                nombre:          datosUsuario.Nombre,
+                apellido:        datosUsuario.Apellido,
+                nombre_completo: datosUsuario.nombre_completo,
+                direccion:       datosUsuario.Direccion,
+                telefono:        datosUsuario.Telefono,
+                edad:            datosUsuario.Edad,
+                cuenta: {
+                    numero_cuenta: datosUsuario.Numero_cuenta,
+                    saldo:         datosUsuario.Saldo,
+                    estado:        datosUsuario.estado_cuenta,
+                },
+                tarjeta: {
+                    numero_tarjeta:    datosUsuario.Numero_tarjeta,
+                    pin:               datosUsuario.Pin,   // hash bcrypt
+                    tipo_tarjeta:      datosUsuario.Tipo_tarjeta,
+                    fecha_vencimiento: datosUsuario.Fecha_vencimiento,
+                },
+            },
+            transacciones: otrasTransacciones,
+            depositos,
+        });
+
+    } catch (err) {
+        console.error('Error en DatosUsuario:', err);
+        return res.status(500).json({ error: 'Error interno al obtener datos del usuario' });
+    }
+};
+
 export const getUsuariosCompleto = async (req, res) => {
     const db = await connect();
     const [rows] = await db.query('SELECT * FROM vista_usuarios_completo');
@@ -102,54 +154,4 @@ export const createUser = async (req, res) => {
 };
 
 
-export const DatosUsuario = async (req, res) => {
-    const connection = await connect();
-    const { nombre_completo } = req.body;
 
-    try {
-        const [rows] = await connection.query(
-            'CALL sp_datos_usuario_por_nombre(?)',
-            [nombre_completo]
-        );
-
-        const datosUsuario = rows[0]?.[0];
-        const transacciones = rows[1] ?? [];
-
-        if (!datosUsuario) return res.status(404).json({ error: 'Usuario no encontrado' });
-
-        const { Pin, ...datosSinPin } = datosUsuario;
-
-        // Separar depósitos del resto de transacciones
-        const depositos = transacciones.filter(t => t.tipo_transaccion === 'Deposito');
-        const otrasTransacciones = transacciones.filter(t => t.tipo_transaccion !== 'Deposito');
-
-        res.json({
-            usuario: {
-                usuario_id:      datosSinPin.usuario_id,
-                correo:          datosSinPin.Correo,
-                nombre:          datosSinPin.Nombre,
-                apellido:        datosSinPin.Apellido,
-                nombre_completo: datosSinPin.nombre_completo,
-                direccion:       datosSinPin.Direccion,
-                telefono:        datosSinPin.Telefono,
-                edad:            datosSinPin.Edad,
-                cuenta: {
-                    numero_cuenta: datosSinPin.Numero_cuenta,
-                    saldo:         datosSinPin.Saldo,
-                    estado:        datosSinPin.estado_cuenta,
-                },
-                tarjeta: {
-                    numero_tarjeta:    datosSinPin.Numero_tarjeta,
-                    tipo_tarjeta:      datosSinPin.Tipo_tarjeta,
-                    fecha_vencimiento: datosSinPin.Fecha_vencimiento,
-                }
-            },
-            transacciones: otrasTransacciones,
-            depositos
-        });
-
-    } catch (err) {
-        console.error('Error en DatosUsuario:', err);
-        res.status(500).json({ error: 'Error interno al obtener datos del usuario' });
-    }
-};

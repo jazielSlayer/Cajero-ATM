@@ -1,46 +1,132 @@
 @api = http://localhost:3700
 
-### Realizar Retiro
+### ─── RETIRO ───────────────────────────────────────────────
 POST {{api}}/retiro
 Content-Type: application/json
 
 {
-    "numero_tarjeta": "1000282973",
-    "pin": "777",
-    "monto": 50.00,
-    "metodo": "ATM"
+  "numero_tarjeta": "4520899596991226",
+  "pin": "5241",
+  "monto": 100,
+  "moneda": "BOB",
+  "tipo_tasa": "oficial",
+  "metodo": "ATM",
+  "confirmar_conversion": true
 }
 
-### Realizar Transferencia
-POST {{api}}/transferencia
+### ─── RETIRO CON CONVERSIÓN (confirmar) ────────────────────
+POST {{api}}/retiro
 Content-Type: application/json
 
 {
-    "numero_de_cuenta": "01872812992",
-    "numero_cuenta_destino": "1000200030004001",
-    "monto": 1000000.00,
-    "metodo": "web",
-    "descripcion": "Por que me da pena"
+  "numero_tarjeta": "4520899596991226",
+  "pin": "5241",
+  "monto": 50,
+  "moneda": "USD",
+  "tipo_tasa": "oficial",
+  "metodo": "ATM",
+  "confirmar_conversion": true
 }
 
-### Realizar Depósito
+### ─── DEPÓSITO ──────────────────────────────────────────────
 POST {{api}}/deposito
 Content-Type: application/json
 
 {
-    "correo": "jazielarmandovargaschoque@gmail.com",
-    "numero_tarjeta": "1000282973",
-    "monto": 10000000000000000000000000.00,
-    "metodo": "ATM",
-    "contrasena": "DrXeno79TESLA",
-    "pin": "777"
+  "correo": "jazielarmandovargaschoque@gmail.com",
+  "numero_tarjeta": "4520899596991226",
+  "contrasena": "DrXeno79TESLA",
+  "pin": "5241",
+  "monto": 500,
+  "moneda_origen": "BOB",
+  "moneda_destino": "BOB",
+  "tipo_tasa": "oficial",
+  "metodo": "ATM"
 }
 
-### Obtener Transacciones de un Usuario
+### ─── DEPÓSITO MULTIMONEDA (USD → BOB) ─────────────────────
+POST {{api}}/deposito
+Content-Type: application/json
+
+{
+  "correo": "jazielarmandovargaschoque@gmail.com",
+  "numero_tarjeta": "4520899596991226",
+  "contrasena": "DrXeno79TESLA",
+  "pin": "5241",
+  "monto": 100,
+  "moneda_origen": "USD",
+  "moneda_destino": "BOB",
+  "tipo_tasa": "binance",
+  "metodo": "ATM"
+}
+
+### ─── TRANSFERENCIA ─────────────────────────────────────────
+POST {{api}}/transferencia
+Content-Type: application/json
+
+{
+  "numero_de_cuenta": "63788349202",
+  "numero_cuenta_destino": "3520899553795811",
+  "monto": 200,
+  "moneda_origen": "BOB",
+  "moneda_destino": "BOB",
+  "tipo_tasa": "oficial",
+  "metodo": "ATM",
+  "descripcion": "Pago de deuda",
+  "confirmar_conversion": false
+}
+
+### ─── TRANSFERENCIA MULTIMONEDA (BOB → USD) ────────────────
+POST {{api}}/transferencia
+Content-Type: application/json
+
+{
+  "numero_de_cuenta": "63788349202",
+  "numero_cuenta_destino": "3520899553795811",
+  "monto": 100,
+  "moneda_origen": "BOB",
+  "moneda_destino": "USD",
+  "tipo_tasa": "oficial",
+  "metodo": "web",
+  "descripcion": "Transferencia internacional",
+  "confirmar_conversion": false
+}
+
+### ─── TRANSFERENCIA CON CONVERSIÓN (confirmar) ─────────────
+POST {{api}}/transferencia
+Content-Type: application/json
+
+{
+  "numero_de_cuenta": "63788349202",
+  "numero_cuenta_destino": "3520899553795811",
+  "monto": 50,
+  "moneda_origen": "USD",
+  "moneda_destino": "BOB",
+  "tipo_tasa": "binance",
+  "metodo": "ATM",
+  "descripcion": "Conversión confirmada",
+  "confirmar_conversion": true
+}
+
+### ─── TRANSACCIONES USUARIO (todas) ────────────────────────
 POST {{api}}/transacciones/usuario
 Content-Type: application/json
 
 {
-    "nombre_completo": "Jaziel Armando Vargas cHoque",
-    "tipo_transaccion": "Transferencia"
+  "nombre_completo": "Jaziel Armando Vargas Choque"
 }
+
+### ─── TRANSACCIONES USUARIO (filtradas por tipo) ───────────
+POST {{api}}/transacciones/usuario
+Content-Type: application/json
+
+{
+  "nombre_completo": "Jaziel Armando Vargas Choque",
+  "tipo_transaccion": "Retiro"
+}
+
+### ─── CONSULTAR SALDOS ──────────────────────────────────────
+GET {{api}}/saldos/3520899553795811
+
+### ─── CONSULTAR TASAS ──────────────────────────────────────
+GET {{api}}/tasas

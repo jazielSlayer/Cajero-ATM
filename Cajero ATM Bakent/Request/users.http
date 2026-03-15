@@ -16,13 +16,13 @@ POST {{api}}/crear/usuario
 Content-Type: application/json
 
 {
-     "nombre": "Carlos",
-    "apellido": "Mamani Choque",
+     "nombre": "Jaziel Armando",
+    "apellido": "Vargas Choque",
     "direccion": "Calle 21 de Enero 456",
     "telefono": "76543210",
     "edad": 25,
-    "correo": "carlos.prueba@gmail.com",
-    "contrasena": "miPassword123",
-    "tipo_tarjeta": "debito",
+    "correo": "jazielarmandovargaschoque@gmail.com",
+    "contrasena": "DrXeno79TESLA",
+    "tipo_tarjeta": "credito",
     "tipo_cuenta": "ahorro"
 }
