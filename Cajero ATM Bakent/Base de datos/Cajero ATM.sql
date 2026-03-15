@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 15-03-2026 a las 18:17:05
+-- Tiempo de generación: 15-03-2026 a las 18:53:58
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.1.25
 
@@ -983,9 +983,9 @@ CREATE TABLE `cambio` (
   `ID_Cuenta` int(11) NOT NULL,
   `Monto_origen` decimal(15,2) NOT NULL,
   `Moneda_origen` varchar(10) NOT NULL,
-  `Monto_destino` decimal(15,6) NOT NULL,
+  `Monto_destino` decimal(15,2) NOT NULL,
   `Moneda_destino` varchar(10) NOT NULL,
-  `Tasa_usada` decimal(15,6) NOT NULL,
+  `Tasa_usada` decimal(15,2) NOT NULL,
   `Tipo_tasa` enum('mercado','oficial','paralelo') NOT NULL DEFAULT 'mercado',
   `Estado` enum('completado','revertido') DEFAULT 'completado',
   `Fecha_cambio` datetime DEFAULT current_timestamp()
@@ -1106,7 +1106,7 @@ CREATE TABLE `saldo_moneda` (
   `ID` int(11) NOT NULL,
   `ID_Cuenta` int(11) NOT NULL,
   `ID_Moneda` int(11) NOT NULL DEFAULT 0,
-  `Saldo` decimal(20,6) NOT NULL DEFAULT 0.000000,
+  `Saldo` decimal(20,2) NOT NULL DEFAULT 0.00,
   `Fecha_creacion` datetime DEFAULT current_timestamp(),
   `Fecha_modificacion` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1116,10 +1116,38 @@ CREATE TABLE `saldo_moneda` (
 --
 
 INSERT INTO `saldo_moneda` (`ID`, `ID_Cuenta`, `ID_Moneda`, `Saldo`, `Fecha_creacion`, `Fecha_modificacion`) VALUES
+(2, 6, 1, 299.00, '2026-03-14 18:22:57', '2026-03-15 13:40:23'),
+(3, 7, 1, 0.00, '2026-03-14 18:22:57', '2026-03-14 21:05:09'),
+(4, 8, 1, 0.00, '2026-03-14 18:22:57', '2026-03-14 21:05:09'),
+(10, 9, 1, 700.00, '2026-03-14 20:49:17', '2026-03-15 13:40:23'),
+(11, 9, 2, 2062.45, '2026-03-14 23:00:43', '2026-03-15 13:41:56'),
+(12, 6, 2, 13.00, '2026-03-15 09:43:29', '2026-03-15 09:43:29'),
+(13, 9, 3, 13.79, '2026-03-15 12:27:36', '2026-03-15 12:27:36');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `saldo_moneda_backup`
+--
+
+CREATE TABLE `saldo_moneda_backup` (
+  `ID` int(11) NOT NULL DEFAULT 0,
+  `ID_Cuenta` int(11) NOT NULL,
+  `ID_Moneda` int(11) NOT NULL DEFAULT 0,
+  `Saldo` decimal(20,6) NOT NULL DEFAULT 0.000000,
+  `Fecha_creacion` datetime DEFAULT current_timestamp(),
+  `Fecha_modificacion` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Volcado de datos para la tabla `saldo_moneda_backup`
+--
+
+INSERT INTO `saldo_moneda_backup` (`ID`, `ID_Cuenta`, `ID_Moneda`, `Saldo`, `Fecha_creacion`, `Fecha_modificacion`) VALUES
 (2, 6, 1, 499.000000, '2026-03-14 18:22:57', '2026-03-15 10:08:29'),
 (3, 7, 1, 0.000000, '2026-03-14 18:22:57', '2026-03-14 21:05:09'),
 (4, 8, 1, 0.000000, '2026-03-14 18:22:57', '2026-03-14 21:05:09'),
-(10, 9, 1, 7384.410400, '2026-03-14 20:49:17', '2026-03-15 13:13:44'),
+(10, 9, 1, 0.000000, '2026-03-14 20:49:17', '2026-03-15 13:22:25'),
 (11, 9, 2, 1562.446372, '2026-03-14 23:00:43', '2026-03-15 13:11:21'),
 (12, 6, 2, 13.000000, '2026-03-15 09:43:29', '2026-03-15 09:43:29'),
 (13, 9, 3, 13.790747, '2026-03-15 12:27:36', '2026-03-15 12:27:36');
@@ -1180,8 +1208,8 @@ CREATE TABLE `tasa_cambio` (
   `ID` int(11) NOT NULL,
   `Moneda_origen` varchar(10) NOT NULL,
   `Moneda_destino` varchar(10) NOT NULL,
-  `Tasa_oficial` decimal(15,6) DEFAULT NULL,
-  `Tasa_paralelo` decimal(15,6) DEFAULT NULL,
+  `Tasa_oficial` decimal(15,2) DEFAULT NULL,
+  `Tasa_paralelo` decimal(15,2) DEFAULT NULL,
   `Fecha_actualizacion` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -1190,7 +1218,7 @@ CREATE TABLE `tasa_cambio` (
 --
 
 INSERT INTO `tasa_cambio` (`ID`, `Moneda_origen`, `Moneda_destino`, `Tasa_oficial`, `Tasa_paralelo`, `Fecha_actualizacion`) VALUES
-(1, 'BOB', 'USD', 0.144092, 0.118000, '2026-03-14 17:44:10');
+(1, 'BOB', 'USD', 0.14, 0.12, '2026-03-14 17:44:10');
 
 -- --------------------------------------------------------
 
@@ -1202,7 +1230,7 @@ CREATE TABLE `tasa_cambio_cache` (
   `ID` int(11) NOT NULL,
   `Moneda_origen` varchar(10) NOT NULL,
   `Moneda_destino` varchar(10) NOT NULL,
-  `Tasa` decimal(20,8) NOT NULL,
+  `Tasa` decimal(20,2) NOT NULL,
   `Tipo_tasa` enum('oficial','binance','manual') NOT NULL DEFAULT 'oficial',
   `Fecha_actualizacion` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1212,6 +1240,31 @@ CREATE TABLE `tasa_cambio_cache` (
 --
 
 INSERT INTO `tasa_cambio_cache` (`ID`, `Moneda_origen`, `Moneda_destino`, `Tasa`, `Tipo_tasa`, `Fecha_actualizacion`) VALUES
+(1, 'BOB', 'USD', 0.14, 'oficial', '2026-03-15 13:11:21'),
+(2, 'USD', 'BOB', 6.96, 'oficial', '2026-03-15 13:11:21'),
+(3, 'BOB', 'USD', 0.11, 'binance', '2026-03-15 13:11:21'),
+(4, 'USD', 'BOB', 9.42, 'binance', '2026-03-15 13:11:21');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `tasa_cambio_cache_backup`
+--
+
+CREATE TABLE `tasa_cambio_cache_backup` (
+  `ID` int(11) NOT NULL DEFAULT 0,
+  `Moneda_origen` varchar(10) NOT NULL,
+  `Moneda_destino` varchar(10) NOT NULL,
+  `Tasa` decimal(20,8) NOT NULL,
+  `Tipo_tasa` enum('oficial','binance','manual') NOT NULL DEFAULT 'oficial',
+  `Fecha_actualizacion` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Volcado de datos para la tabla `tasa_cambio_cache_backup`
+--
+
+INSERT INTO `tasa_cambio_cache_backup` (`ID`, `Moneda_origen`, `Moneda_destino`, `Tasa`, `Tipo_tasa`, `Fecha_actualizacion`) VALUES
 (1, 'BOB', 'USD', 0.14367816, 'oficial', '2026-03-15 13:11:21'),
 (2, 'USD', 'BOB', 6.96000000, 'oficial', '2026-03-15 13:11:21'),
 (3, 'BOB', 'USD', 0.10615711, 'binance', '2026-03-15 13:11:21'),
@@ -1290,7 +1343,14 @@ INSERT INTO `transacciones` (`ID`, `ID_Cuenta_Transfiere`, `ID_Cuenta_Transferid
 (34, 9, NULL, 2, 104.33, 0.00, 13.79, 'ATM', 'exitosa', 'Depósito 14.990000 USD → 13.790747 EUR | Tasa oficial: 6.96000000', '2026-03-15 12:27:36', '2026-03-15 12:27:36', '2026-03-15 12:27:36'),
 (35, 9, NULL, 2, 500.00, 1063.45, 1563.45, 'ATM', 'exitosa', 'Depósito directo 500.000000 USD', '2026-03-15 12:49:56', '2026-03-15 12:49:56', '2026-03-15 12:49:56'),
 (36, 9, NULL, 1, 6.96, 7398.33, 7391.37, 'ATM', 'exitosa', 'Retiro directo en USD | Tasa oficial: 6.96000000', '2026-03-15 13:11:21', '2026-03-15 13:11:21', '2026-03-15 13:11:21'),
-(37, 9, NULL, 1, 6.96, 7391.37, 7384.41, 'ATM', 'exitosa', 'Retiro directo en BOB | Tasa oficial: 1.00000000', '2026-03-15 13:13:44', '2026-03-15 13:13:44', '2026-03-15 13:13:44');
+(37, 9, NULL, 1, 6.96, 7391.37, 7384.41, 'ATM', 'exitosa', 'Retiro directo en BOB | Tasa oficial: 1.00000000', '2026-03-15 13:13:44', '2026-03-15 13:13:44', '2026-03-15 13:13:44'),
+(38, 9, NULL, 2, 500.00, 0.00, 500.00, 'ATM', 'exitosa', 'Depósito directo 500.000000 BOB', '2026-03-15 13:20:26', '2026-03-15 13:20:26', '2026-03-15 13:20:26'),
+(39, 9, NULL, 1, 500.00, 500.00, 0.00, 'ATM', 'exitosa', 'Retiro directo en BOB | Tasa oficial: 1.00000000', '2026-03-15 13:22:25', '2026-03-15 13:22:25', '2026-03-15 13:22:25'),
+(40, 9, NULL, 2, 500.00, 0.00, 500.00, 'ATM', 'exitosa', 'Depósito directo 500.000000 BOB', '2026-03-15 13:28:33', '2026-03-15 13:28:33', '2026-03-15 13:28:33'),
+(41, 9, NULL, 2, 500.00, 500.00, 1000.00, 'ATM', 'exitosa', 'Depósito directo 500.000000 BOB', '2026-03-15 13:39:23', '2026-03-15 13:39:23', '2026-03-15 13:39:23'),
+(42, 9, NULL, 1, 500.00, 1000.00, 500.00, 'ATM', 'exitosa', 'Retiro directo en BOB | Tasa oficial: 1.00000000', '2026-03-15 13:39:49', '2026-03-15 13:39:49', '2026-03-15 13:39:49'),
+(43, 6, 9, 3, 200.00, 499.00, 299.00, 'ATM', 'exitosa', 'Pago de deuda | 200.000000 BOB → 200.000000 BOB | Tasa oficial', '2026-03-15 13:40:23', '2026-03-15 13:40:23', '2026-03-15 13:40:23'),
+(44, 9, NULL, 2, 500.00, 1562.45, 2062.45, 'ATM', 'exitosa', 'Depósito directo 500.000000 USD', '2026-03-15 13:41:56', '2026-03-15 13:41:56', '2026-03-15 13:41:56');
 
 -- --------------------------------------------------------
 
@@ -1329,7 +1389,7 @@ CREATE TABLE `vista_cuentas_resumen` (
 `cuenta_id` int(11)
 ,`Numero_cuenta` varchar(20)
 ,`Tipo_cuenta` enum('ahorro','corriente')
-,`saldo_bob` decimal(20,6)
+,`saldo_bob` decimal(20,2)
 ,`estado_cuenta` enum('activa','bloqueada','cerrada')
 ,`fecha_apertura` datetime
 ,`usuario_id` int(11)
@@ -1340,7 +1400,7 @@ CREATE TABLE `vista_cuentas_resumen` (
 ,`estado_tarjeta` enum('activa','bloqueada','vencida','cancelada')
 ,`Fecha_vencimiento` date
 ,`Codigo_moneda` varchar(10)
-,`saldo_moneda` decimal(20,6)
+,`saldo_moneda` decimal(20,2)
 );
 
 -- --------------------------------------------------------
@@ -1646,7 +1706,7 @@ ALTER TABLE `tipo_transaccion`
 -- AUTO_INCREMENT de la tabla `transacciones`
 --
 ALTER TABLE `transacciones`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=38;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=45;
 
 --
 -- AUTO_INCREMENT de la tabla `users`
