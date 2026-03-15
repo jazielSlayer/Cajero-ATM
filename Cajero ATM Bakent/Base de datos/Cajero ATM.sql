@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 15-03-2026 a las 03:00:24
+-- Tiempo de generación: 15-03-2026 a las 15:09:46
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.1.25
 
@@ -73,24 +73,6 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_cambiar_estado_tarjeta` (IN `p_p
     END IF;
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_cuentas_usuario` (IN `p_nombre_completo` VARCHAR(201))   BEGIN
-    SELECT
-        vcr.cuenta_id,
-        vcr.Numero_cuenta,
-        vcr.Tipo_cuenta,
-        vcr.Saldo,
-        vcr.estado_cuenta,
-        vcr.fecha_apertura,
-        vcr.Numero_tarjeta,
-        vcr.Tipo_tarjeta,
-        vcr.estado_tarjeta,
-        vcr.Fecha_vencimiento
-    FROM vista_cuentas_resumen vcr
-    INNER JOIN vista_usuarios_completo vuc ON vcr.usuario_id = vuc.usuario_id
-    WHERE vuc.nombre_completo = p_nombre_completo
-    ORDER BY vcr.fecha_apertura DESC;
-END$$
-
 CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_datos_usuario_por_nombre` (IN `p_nombre_completo` VARCHAR(201))   BEGIN
     -- Datos del usuario con cuenta, tarjeta y Pin (hash bcrypt)
     SELECT
@@ -136,56 +118,9 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_datos_usuario_por_nombre` (IN `p
     ORDER BY vtc.Fecha_transaccion DESC;
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_estado_cuenta` (IN `p_nombre_completo` VARCHAR(201))   BEGIN
-    -- Info del usuario
-    SELECT
-        nombre_completo,
-        Correo,
-        estado_usuario,
-        fecha_registro,
-        rol
-    FROM vista_usuarios_completo
-    WHERE nombre_completo = p_nombre_completo
-    LIMIT 1;
-
-    -- Cuentas con saldo y tarjetas
-    SELECT
-        vcr.cuenta_id,
-        vcr.Numero_cuenta,
-        vcr.Tipo_cuenta,
-        vcr.Saldo,
-        vcr.estado_cuenta,
-        vcr.fecha_apertura,
-        vcr.Numero_tarjeta,
-        vcr.Tipo_tarjeta,
-        vcr.estado_tarjeta,
-        vcr.Fecha_vencimiento
-    FROM vista_cuentas_resumen vcr
-    INNER JOIN vista_usuarios_completo vuc ON vcr.usuario_id = vuc.usuario_id
-    WHERE vuc.nombre_completo = p_nombre_completo;
-
-    -- Últimas 5 transacciones
-    SELECT
-        vtc.transaccion_id,
-        vtc.tipo_transaccion,
-        vtc.Monto,
-        vtc.Saldo_posterior  AS saldo_tras_operacion,
-        vtc.cuenta_origen,
-        vtc.cuenta_destino,
-        vtc.nombre_destinatario,
-        vtc.Metodo_transaccion,
-        vtc.estado_transaccion,
-        vtc.Fecha_transaccion
-    FROM vista_transacciones_completo vtc
-    INNER JOIN vista_usuarios_completo vuc ON vtc.usuario_id = vuc.usuario_id
-    WHERE vuc.nombre_completo = p_nombre_completo
-    ORDER BY vtc.Fecha_transaccion DESC
-    LIMIT 5;
-END$$
-
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito` (IN `p_correo` VARCHAR(150), IN `p_monto` DECIMAL(20,6), IN `p_moneda` VARCHAR(10), IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_contrasena` VARCHAR(255), IN `p_pin` VARCHAR(255), IN `p_tasa` DECIMAL(20,8), IN `p_tipo_tasa` ENUM('oficial','binance','manual'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito` (IN `p_correo` VARCHAR(150), IN `p_monto` DECIMAL(20,6), IN `p_id_moneda` INT, IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_contrasena` VARCHAR(255), IN `p_pin` VARCHAR(255), IN `p_tasa` DECIMAL(20,8), IN `p_tipo_tasa` ENUM('oficial','binance','manual'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
     DECLARE v_cuenta_id      INT;
-    DECLARE v_saldo_bob      DECIMAL(20,6);
+    DECLARE v_saldo_bob      DECIMAL(20,6) DEFAULT 0;
     DECLARE v_estado_cuenta  VARCHAR(20);
     DECLARE v_usuario_id     INT;
     DECLARE v_contrasena_bd  VARCHAR(255);
@@ -194,6 +129,9 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito` (IN `p_correo
     DECLARE v_tipo_deposito  INT;
     DECLARE v_monto_bob      DECIMAL(20,6);
     DECLARE v_saldo_mon_id   INT;
+    DECLARE v_saldo_bob_id   INT;
+    DECLARE v_id_bob         INT;
+    DECLARE v_codigo_moneda  VARCHAR(10);
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -202,11 +140,12 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito` (IN `p_correo
         SET p_mensaje = 'Error interno: Depósito cancelado.';
     END;
 
+    SELECT ID INTO v_id_bob FROM moneda WHERE Codigo = 'BOB' LIMIT 1;
+    SELECT Codigo INTO v_codigo_moneda FROM moneda WHERE ID = p_id_moneda LIMIT 1;
+
     SELECT u.ID, u.Contrasena, u.Estado
     INTO   v_usuario_id, v_contrasena_bd, v_estado_usuario
-    FROM   Users u
-    WHERE  u.Correo = p_correo
-    LIMIT  1;
+    FROM   Users u WHERE u.Correo = p_correo LIMIT 1;
 
     IF v_usuario_id IS NULL THEN
         SET p_transaccion_id = -1;
@@ -221,10 +160,17 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito` (IN `p_correo
         SET p_mensaje = 'Error: Contraseña incorrecta.';
 
     ELSE
-        SELECT ID, Saldo, Estado
-        INTO   v_cuenta_id, v_saldo_bob, v_estado_cuenta
-        FROM   Cuenta
-        WHERE  ID_Users = v_usuario_id AND Estado = 'activa'
+        SELECT c.ID, c.Estado
+        INTO   v_cuenta_id, v_estado_cuenta
+        FROM   Cuenta c
+        WHERE  c.ID_Users = v_usuario_id AND c.Estado = 'activa'
+        LIMIT  1;
+
+        -- Saldo BOB actual desde saldo_moneda
+        SELECT ID, Saldo
+        INTO   v_saldo_bob_id, v_saldo_bob
+        FROM   saldo_moneda
+        WHERE  ID_Cuenta = v_cuenta_id AND ID_Moneda = v_id_bob
         LIMIT  1;
 
         SELECT Pin INTO v_pin_bd
@@ -235,7 +181,8 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito` (IN `p_correo
         SELECT ID INTO v_tipo_deposito
         FROM   Tipo_Transaccion WHERE Nombre = 'Deposito';
 
-        IF p_moneda = 'BOB' THEN
+        -- Calcular equivalente BOB
+        IF p_id_moneda = v_id_bob THEN
             SET v_monto_bob = p_monto;
         ELSE
             SET v_monto_bob = p_monto * p_tasa;
@@ -260,39 +207,50 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito` (IN `p_correo
         ELSE
             START TRANSACTION;
 
+            -- Actualizar o insertar saldo en la moneda depositada
             SELECT ID INTO v_saldo_mon_id
             FROM   saldo_moneda
-            WHERE  ID_Cuenta = v_cuenta_id AND Codigo_moneda = p_moneda
+            WHERE  ID_Cuenta = v_cuenta_id AND ID_Moneda = p_id_moneda
             LIMIT  1;
 
             IF v_saldo_mon_id IS NULL THEN
-                INSERT INTO saldo_moneda (ID_Cuenta, Codigo_moneda, Saldo)
-                VALUES (v_cuenta_id, p_moneda, p_monto);
+                INSERT INTO saldo_moneda (ID_Cuenta, ID_Moneda, Saldo)
+                VALUES (v_cuenta_id, p_id_moneda, p_monto);
             ELSE
                 UPDATE saldo_moneda
                 SET    Saldo = Saldo + p_monto
                 WHERE  ID = v_saldo_mon_id;
             END IF;
 
-            UPDATE Cuenta
-            SET    Saldo = Saldo + v_monto_bob
-            WHERE  ID = v_cuenta_id;
+            -- Si la moneda NO es BOB, también sumar el equivalente BOB
+            IF p_id_moneda != v_id_bob THEN
+                IF v_saldo_bob_id IS NULL THEN
+                    INSERT INTO saldo_moneda (ID_Cuenta, ID_Moneda, Saldo)
+                    VALUES (v_cuenta_id, v_id_bob, v_monto_bob);
+                ELSE
+                    UPDATE saldo_moneda
+                    SET    Saldo = Saldo + v_monto_bob
+                    WHERE  ID = v_saldo_bob_id;
+                END IF;
+            END IF;
 
             INSERT INTO Transacciones (
                 ID_Cuenta_Transfiere, ID_Tipo_Transaccion, Monto,
                 Saldo_anterior, Saldo_posterior, Metodo_transaccion, Estado, Descripcion
             ) VALUES (
                 v_cuenta_id, v_tipo_deposito, v_monto_bob,
-                v_saldo_bob, (v_saldo_bob + v_monto_bob), p_metodo, 'exitosa',
-                CONCAT('Depósito en ', p_moneda, ' | Tasa ', p_tipo_tasa, ': ', p_tasa)
+                IFNULL(v_saldo_bob, 0),
+                IFNULL(v_saldo_bob, 0) + v_monto_bob,
+                p_metodo, 'exitosa',
+                CONCAT('Depósito en ', v_codigo_moneda, ' | Tasa ', p_tipo_tasa, ': ', p_tasa)
             );
 
             SET p_transaccion_id = LAST_INSERT_ID();
             COMMIT;
             SET p_mensaje = CONCAT(
-                'Depósito exitoso. Monto: ', p_monto, ' ', p_moneda,
+                'Depósito exitoso. Monto: ', p_monto, ' ', v_codigo_moneda,
                 ' | Equivalente BOB: ', ROUND(v_monto_bob, 2),
-                ' | Nuevo saldo BOB: ', ROUND(v_saldo_bob + v_monto_bob, 2)
+                ' | Nuevo saldo BOB: ', ROUND(IFNULL(v_saldo_bob, 0) + v_monto_bob, 2)
             );
         END IF;
     END IF;
@@ -300,7 +258,7 @@ END$$
 
 CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito_multimoneda` (IN `p_correo` VARCHAR(150), IN `p_monto_origen` DECIMAL(20,6), IN `p_id_moneda_origen` INT, IN `p_monto_destino` DECIMAL(20,6), IN `p_id_moneda_destino` INT, IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_contrasena` VARCHAR(255), IN `p_pin` VARCHAR(255), IN `p_tasa` DECIMAL(20,8), IN `p_tipo_tasa` ENUM('oficial','binance','manual'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
     DECLARE v_cuenta_id      INT;
-    DECLARE v_saldo_bob      DECIMAL(20,6);
+    DECLARE v_saldo_bob      DECIMAL(20,6) DEFAULT 0;
     DECLARE v_usuario_id     INT;
     DECLARE v_contrasena_bd  VARCHAR(255);
     DECLARE v_estado_usuario VARCHAR(20);
@@ -308,9 +266,14 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito_multimoneda` (
     DECLARE v_tipo_deposito  INT;
     DECLARE v_monto_bob      DECIMAL(20,6);
     DECLARE v_saldo_dest_id  INT;
+    DECLARE v_saldo_bob_id   INT;
+    DECLARE v_saldo_dest_actual DECIMAL(20,6) DEFAULT 0;
     DECLARE v_codigo_origen  VARCHAR(10);
     DECLARE v_codigo_destino VARCHAR(10);
     DECLARE v_id_bob         INT;
+
+    -- ¿Hay conversión real entre monedas distintas?
+    DECLARE v_hay_conversion TINYINT(1) DEFAULT 0;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -319,9 +282,12 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito_multimoneda` (
         SET p_mensaje = 'Error interno: Depósito cancelado.';
     END;
 
-    SELECT ID    INTO v_id_bob          FROM moneda WHERE Codigo = 'BOB' LIMIT 1;
+    SELECT ID     INTO v_id_bob          FROM moneda WHERE Codigo = 'BOB' LIMIT 1;
     SELECT Codigo INTO v_codigo_origen   FROM moneda WHERE ID = p_id_moneda_origen  LIMIT 1;
     SELECT Codigo INTO v_codigo_destino  FROM moneda WHERE ID = p_id_moneda_destino LIMIT 1;
+
+    -- ¿Conversión real?
+    SET v_hay_conversion = IF(p_id_moneda_origen != p_id_moneda_destino, 1, 0);
 
     SELECT u.ID, u.Contrasena, u.Estado
     INTO   v_usuario_id, v_contrasena_bd, v_estado_usuario
@@ -334,14 +300,20 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito_multimoneda` (
     ELSEIF v_contrasena_bd != p_contrasena THEN
         SET p_transaccion_id = -1; SET p_mensaje = 'Error: Contraseña incorrecta.';
     ELSE
-        SELECT c.ID, c.Saldo INTO v_cuenta_id, v_saldo_bob
+        SELECT c.ID INTO v_cuenta_id
         FROM   Cuenta c WHERE c.ID_Users = v_usuario_id AND c.Estado = 'activa' LIMIT 1;
+
+        -- Saldo BOB actual (solo relevante si hay conversión)
+        SELECT ID, Saldo INTO v_saldo_bob_id, v_saldo_bob
+        FROM   saldo_moneda
+        WHERE  ID_Cuenta = v_cuenta_id AND ID_Moneda = v_id_bob LIMIT 1;
 
         SELECT tar.Pin INTO v_pin_bd
         FROM   Tarjeta tar WHERE tar.ID_Cuenta = v_cuenta_id AND tar.Estado = 'activa' LIMIT 1;
 
         SELECT ID INTO v_tipo_deposito FROM Tipo_Transaccion WHERE Nombre = 'Deposito';
 
+        -- Equivalente BOB del depósito
         IF p_id_moneda_origen = v_id_bob THEN
             SET v_monto_bob = p_monto_origen;
         ELSE
@@ -359,53 +331,92 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito_multimoneda` (
         ELSE
             START TRANSACTION;
 
-            SELECT ID INTO v_saldo_dest_id
+            -- Saldo actual en moneda destino (para el mensaje)
+            SELECT ID, Saldo INTO v_saldo_dest_id, v_saldo_dest_actual
             FROM   saldo_moneda
-            WHERE  ID_Cuenta = v_cuenta_id AND ID_Moneda = p_id_moneda_destino
-            LIMIT  1;
+            WHERE  ID_Cuenta = v_cuenta_id AND ID_Moneda = p_id_moneda_destino LIMIT 1;
 
+            -- Acreditar moneda destino
             IF v_saldo_dest_id IS NULL THEN
                 INSERT INTO saldo_moneda (ID_Cuenta, ID_Moneda, Saldo)
                 VALUES (v_cuenta_id, p_id_moneda_destino, p_monto_destino);
             ELSE
-                UPDATE saldo_moneda SET Saldo = Saldo + p_monto_destino WHERE ID = v_saldo_dest_id;
+                UPDATE saldo_moneda
+                SET    Saldo = Saldo + p_monto_destino
+                WHERE  ID = v_saldo_dest_id;
             END IF;
 
-            UPDATE Cuenta SET Saldo = Saldo + v_monto_bob WHERE ID = v_cuenta_id;
+            -- ▸ CAMBIO: actualizar BOB espejo SOLO si hay conversión real
+            --   y la moneda destino no es BOB
+            IF v_hay_conversion = 1 AND p_id_moneda_destino != v_id_bob THEN
+                IF v_saldo_bob_id IS NULL THEN
+                    INSERT INTO saldo_moneda (ID_Cuenta, ID_Moneda, Saldo)
+                    VALUES (v_cuenta_id, v_id_bob, v_monto_bob);
+                ELSE
+                    UPDATE saldo_moneda
+                    SET    Saldo = Saldo + v_monto_bob
+                    WHERE  ID = v_saldo_bob_id;
+                END IF;
+            END IF;
 
+            -- Registrar transacción
+            -- Saldo anterior y posterior en la moneda real del depósito
             INSERT INTO Transacciones (
                 ID_Cuenta_Transfiere, ID_Tipo_Transaccion, Monto,
                 Saldo_anterior, Saldo_posterior, Metodo_transaccion, Estado, Descripcion
             ) VALUES (
-                v_cuenta_id, v_tipo_deposito, v_monto_bob,
-                v_saldo_bob, (v_saldo_bob + v_monto_bob), p_metodo, 'exitosa',
-                CONCAT('Depósito ', p_monto_origen, ' ', v_codigo_origen,
-                       ' → ', p_monto_destino, ' ', v_codigo_destino,
-                       ' | Tasa ', p_tipo_tasa, ': ', p_tasa)
+                v_cuenta_id, v_tipo_deposito,
+                -- Monto en BOB solo si es conversión, si no en la moneda real
+                IF(v_hay_conversion = 1, v_monto_bob, p_monto_destino),
+                IFNULL(v_saldo_dest_actual, 0),
+                IFNULL(v_saldo_dest_actual, 0) + p_monto_destino,
+                p_metodo, 'exitosa',
+                IF(v_hay_conversion = 1,
+                    CONCAT('Depósito ', p_monto_origen, ' ', v_codigo_origen,
+                           ' → ', p_monto_destino, ' ', v_codigo_destino,
+                           ' | Tasa ', p_tipo_tasa, ': ', p_tasa),
+                    CONCAT('Depósito directo ', p_monto_destino, ' ', v_codigo_destino)
+                )
             );
 
             SET p_transaccion_id = LAST_INSERT_ID();
             COMMIT;
-            SET p_mensaje = CONCAT(
-                'Depósito exitoso. ',
-                p_monto_origen, ' ', v_codigo_origen,
-                ' → acreditado: ', p_monto_destino, ' ', v_codigo_destino,
-                ' | Nuevo saldo BOB: ', ROUND(v_saldo_bob + v_monto_bob, 2)
+
+            -- Mensaje con saldo en la moneda REAL (no siempre BOB)
+            SET p_mensaje = IF(v_hay_conversion = 1,
+                CONCAT(
+                    'Depósito exitoso. ',
+                    p_monto_origen, ' ', v_codigo_origen,
+                    ' → acreditado: ', p_monto_destino, ' ', v_codigo_destino,
+                    ' | Equiv. BOB sumado: ', ROUND(v_monto_bob, 2),
+                    ' | Nuevo saldo BOB: ', ROUND(IFNULL(v_saldo_bob, 0) + v_monto_bob, 2)
+                ),
+                CONCAT(
+                    'Depósito exitoso. ', p_monto_destino, ' ', v_codigo_destino,
+                    ' | Nuevo saldo ', v_codigo_destino, ': ',
+                    ROUND(IFNULL(v_saldo_dest_actual, 0) + p_monto_destino, 6)
+                )
             );
         END IF;
     END IF;
 END$$
 
 CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro` (IN `p_pin` VARCHAR(255), IN `p_monto` DECIMAL(20,6), IN `p_id_moneda` INT, IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_tasa` DECIMAL(20,8), IN `p_tipo_tasa` ENUM('oficial','binance','manual'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
-    DECLARE v_cuenta_id     INT;
-    DECLARE v_saldo_bob     DECIMAL(20,6);
-    DECLARE v_estado        VARCHAR(20);
-    DECLARE v_tipo_retiro   INT;
-    DECLARE v_monto_bob     DECIMAL(20,6);
-    DECLARE v_saldo_mon_id  INT;
-    DECLARE v_saldo_moneda  DECIMAL(20,6);
-    DECLARE v_codigo_moneda VARCHAR(10);
-    DECLARE v_id_bob        INT;
+    DECLARE v_cuenta_id      INT;
+    DECLARE v_saldo_bob      DECIMAL(20,6) DEFAULT 0;
+    DECLARE v_tipo_retiro    INT;
+    DECLARE v_monto_bob      DECIMAL(20,6);
+    DECLARE v_saldo_mon_id   INT;
+    DECLARE v_saldo_moneda   DECIMAL(20,6) DEFAULT 0;
+    DECLARE v_saldo_bob_id   INT;
+    DECLARE v_codigo_moneda  VARCHAR(10);
+    DECLARE v_id_bob         INT;
+
+    -- ¿El retiro implica conversión? Solo si la moneda no es BOB
+    -- y no hay saldo suficiente en esa moneda (lo maneja el JS,
+    -- aquí registramos si debemos descontar BOB espejo).
+    -- En retiro directo (tiene saldo en la moneda pedida) NO se toca BOB.
+    DECLARE v_es_retiro_directo TINYINT(1) DEFAULT 1;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -414,11 +425,10 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro` (IN `p_pin` VAR
         SET p_mensaje = 'Error interno: Retiro cancelado.';
     END;
 
-    SELECT ID    INTO v_id_bob         FROM moneda WHERE Codigo = 'BOB' LIMIT 1;
-    SELECT Codigo INTO v_codigo_moneda  FROM moneda WHERE ID = p_id_moneda LIMIT 1;
+    SELECT ID     INTO v_id_bob        FROM moneda WHERE Codigo = 'BOB' LIMIT 1;
+    SELECT Codigo INTO v_codigo_moneda FROM moneda WHERE ID = p_id_moneda LIMIT 1;
 
-    SELECT c.ID, c.Saldo, c.Estado
-    INTO   v_cuenta_id, v_saldo_bob, v_estado
+    SELECT c.ID INTO v_cuenta_id
     FROM   Tarjeta tar
     INNER JOIN Cuenta c ON tar.ID_Cuenta = c.ID
     WHERE  tar.Pin = p_pin AND tar.Estado = 'activa' AND c.Estado = 'activa'
@@ -426,63 +436,117 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro` (IN `p_pin` VAR
 
     SELECT ID INTO v_tipo_retiro FROM Tipo_Transaccion WHERE Nombre = 'Retiro';
 
-    SELECT ID, Saldo
-    INTO   v_saldo_mon_id, v_saldo_moneda
+    -- Saldo en la moneda solicitada
+    SELECT ID, Saldo INTO v_saldo_mon_id, v_saldo_moneda
     FROM   saldo_moneda
-    WHERE  ID_Cuenta = v_cuenta_id AND ID_Moneda = p_id_moneda
-    LIMIT 1;
+    WHERE  ID_Cuenta = v_cuenta_id AND ID_Moneda = p_id_moneda LIMIT 1;
 
+    -- Saldo BOB (para auditoría y para el caso de conversión)
+    SELECT ID, Saldo INTO v_saldo_bob_id, v_saldo_bob
+    FROM   saldo_moneda
+    WHERE  ID_Cuenta = v_cuenta_id AND ID_Moneda = v_id_bob LIMIT 1;
+
+    -- Calcular equivalente BOB
     IF p_id_moneda = v_id_bob THEN
         SET v_monto_bob = p_monto;
     ELSE
         SET v_monto_bob = p_monto * p_tasa;
     END IF;
 
+    -- ¿Es retiro directo? Sí si tiene saldo suficiente en la moneda pedida.
+    -- Es conversión si NO tiene saldo y se descuenta de BOB.
+    IF p_id_moneda != v_id_bob AND (v_saldo_mon_id IS NULL OR v_saldo_moneda < p_monto) THEN
+        SET v_es_retiro_directo = 0; -- conversión: usará BOB
+    END IF;
+
+    -- ── Validaciones ─────────────────────────────────────────────────────────
     IF v_cuenta_id IS NULL THEN
         SET p_transaccion_id = -1;
         SET p_mensaje = 'Error: No se encontró cuenta activa para ese PIN.';
-    ELSEIF v_saldo_mon_id IS NULL THEN
-        SET p_transaccion_id = -1;
-        SET p_mensaje = CONCAT('Error: No tiene saldo registrado en ', v_codigo_moneda, '.');
-    ELSEIF v_saldo_moneda < p_monto THEN
-        SET p_transaccion_id = -1;
-        SET p_mensaje = CONCAT('Error: Saldo insuficiente en ', v_codigo_moneda,
-                               '. Disponible: ', v_saldo_moneda);
-    ELSEIF v_saldo_bob < v_monto_bob THEN
-        SET p_transaccion_id = -1;
-        SET p_mensaje = 'Error: Saldo BOB insuficiente para cubrir el retiro.';
+
     ELSEIF p_monto <= 0 THEN
         SET p_transaccion_id = -1;
         SET p_mensaje = 'Error: El monto debe ser mayor a 0.';
+
+    ELSEIF v_es_retiro_directo = 1 THEN
+        -- Validar saldo directo
+        IF v_saldo_mon_id IS NULL THEN
+            SET p_transaccion_id = -1;
+            SET p_mensaje = CONCAT('Error: No tiene saldo registrado en ', v_codigo_moneda, '.');
+        ELSEIF v_saldo_moneda < p_monto THEN
+            SET p_transaccion_id = -1;
+            SET p_mensaje = CONCAT('Error: Saldo insuficiente en ', v_codigo_moneda,
+                                   '. Disponible: ', v_saldo_moneda);
+        ELSE
+            -- ── Retiro directo ────────────────────────────────────────────────
+            START TRANSACTION;
+
+            UPDATE saldo_moneda SET Saldo = Saldo - p_monto WHERE ID = v_saldo_mon_id;
+
+            -- Si la moneda no es BOB, también descontar el espejo BOB
+            -- SOLO si el espejo existe (fue acreditado al depositar)
+            IF p_id_moneda != v_id_bob AND v_saldo_bob_id IS NOT NULL AND v_saldo_bob >= v_monto_bob THEN
+                UPDATE saldo_moneda SET Saldo = Saldo - v_monto_bob WHERE ID = v_saldo_bob_id;
+            END IF;
+
+            INSERT INTO Transacciones (
+                ID_Cuenta_Transfiere, ID_Tipo_Transaccion, Monto,
+                Saldo_anterior, Saldo_posterior, Metodo_transaccion, Estado, Descripcion
+            ) VALUES (
+                v_cuenta_id, v_tipo_retiro, v_monto_bob,
+                IFNULL(v_saldo_bob, v_saldo_moneda),
+                IFNULL(v_saldo_bob, v_saldo_moneda) - v_monto_bob,
+                p_metodo, 'exitosa',
+                CONCAT('Retiro directo en ', v_codigo_moneda, ' | Tasa ', p_tipo_tasa, ': ', p_tasa)
+            );
+
+            SET p_transaccion_id = LAST_INSERT_ID();
+            COMMIT;
+            SET p_mensaje = CONCAT(
+                'Retiro exitoso. Monto: ', p_monto, ' ', v_codigo_moneda,
+                ' | Equivalente BOB: ', ROUND(v_monto_bob, 2),
+                ' | Saldo restante en ', v_codigo_moneda, ': ',
+                ROUND(v_saldo_moneda - p_monto, 6)
+            );
+        END IF;
+
     ELSE
-        START TRANSACTION;
+        -- ── Conversión desde BOB (no tiene saldo en la moneda pedida) ─────────
+        IF v_saldo_bob_id IS NULL OR v_saldo_bob < v_monto_bob THEN
+            SET p_transaccion_id = -1;
+            SET p_mensaje = CONCAT('Error: Saldo BOB insuficiente. Necesita ',
+                                   ROUND(v_monto_bob, 2), ' BOB. Disponible: ',
+                                   IFNULL(v_saldo_bob, 0));
+        ELSE
+            START TRANSACTION;
 
-        UPDATE saldo_moneda SET Saldo = Saldo - p_monto      WHERE ID = v_saldo_mon_id;
-        UPDATE Cuenta          SET Saldo = Saldo - v_monto_bob WHERE ID = v_cuenta_id;
+            UPDATE saldo_moneda SET Saldo = Saldo - v_monto_bob WHERE ID = v_saldo_bob_id;
 
-        INSERT INTO Transacciones (
-            ID_Cuenta_Transfiere, ID_Tipo_Transaccion, Monto,
-            Saldo_anterior, Saldo_posterior, Metodo_transaccion, Estado, Descripcion
-        ) VALUES (
-            v_cuenta_id, v_tipo_retiro, v_monto_bob,
-            v_saldo_bob, (v_saldo_bob - v_monto_bob), p_metodo, 'exitosa',
-            CONCAT('Retiro directo en ', v_codigo_moneda, ' | Tasa ', p_tipo_tasa, ': ', p_tasa)
-        );
+            INSERT INTO Transacciones (
+                ID_Cuenta_Transfiere, ID_Tipo_Transaccion, Monto,
+                Saldo_anterior, Saldo_posterior, Metodo_transaccion, Estado, Descripcion
+            ) VALUES (
+                v_cuenta_id, v_tipo_retiro, v_monto_bob,
+                v_saldo_bob, v_saldo_bob - v_monto_bob,
+                p_metodo, 'exitosa',
+                CONCAT('Retiro conv. ', p_monto, ' ', v_codigo_moneda,
+                       ' desde BOB | Tasa ', p_tipo_tasa, ': ', p_tasa)
+            );
 
-        SET p_transaccion_id = LAST_INSERT_ID();
-        COMMIT;
-        SET p_mensaje = CONCAT(
-            'Retiro exitoso. Monto: ', p_monto, ' ', v_codigo_moneda,
-            ' | Equivalente BOB: ', ROUND(v_monto_bob, 2),
-            ' | Saldo BOB restante: ', ROUND(v_saldo_bob - v_monto_bob, 2)
-        );
+            SET p_transaccion_id = LAST_INSERT_ID();
+            COMMIT;
+            SET p_mensaje = CONCAT(
+                'Retiro exitoso. ', p_monto, ' ', v_codigo_moneda,
+                ' | BOB descontados: ', ROUND(v_monto_bob, 2),
+                ' | Saldo BOB restante: ', ROUND(v_saldo_bob - v_monto_bob, 2)
+            );
+        END IF;
     END IF;
 END$$
 
 CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro_conversion` (IN `p_pin` VARCHAR(255), IN `p_monto` DECIMAL(20,6), IN `p_id_moneda` INT, IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_tasa_bob` DECIMAL(20,8), IN `p_tipo_tasa` ENUM('oficial','binance','manual'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
     DECLARE v_cuenta_id     INT;
-    DECLARE v_saldo_bob     DECIMAL(20,6);
-    DECLARE v_estado        VARCHAR(20);
+    DECLARE v_saldo_bob     DECIMAL(20,6) DEFAULT 0;
     DECLARE v_tipo_retiro   INT;
     DECLARE v_monto_bob     DECIMAL(20,6);
     DECLARE v_saldo_bob_id  INT;
@@ -496,13 +560,12 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro_conversion` (IN 
         SET p_mensaje = 'Error interno: Retiro con conversión cancelado.';
     END;
 
-    SELECT ID    INTO v_id_bob         FROM moneda WHERE Codigo = 'BOB' LIMIT 1;
-    SELECT Codigo INTO v_codigo_moneda  FROM moneda WHERE ID = p_id_moneda LIMIT 1;
+    SELECT ID    INTO v_id_bob        FROM moneda WHERE Codigo = 'BOB' LIMIT 1;
+    SELECT Codigo INTO v_codigo_moneda FROM moneda WHERE ID = p_id_moneda LIMIT 1;
 
     SET v_monto_bob = p_monto * p_tasa_bob;
 
-    SELECT c.ID, c.Saldo, c.Estado
-    INTO   v_cuenta_id, v_saldo_bob, v_estado
+    SELECT c.ID INTO v_cuenta_id
     FROM   Tarjeta tar
     INNER JOIN Cuenta c ON tar.ID_Cuenta = c.ID
     WHERE  tar.Pin = p_pin AND tar.Estado = 'activa' AND c.Estado = 'activa'
@@ -510,11 +573,9 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro_conversion` (IN 
 
     SELECT ID INTO v_tipo_retiro FROM Tipo_Transaccion WHERE Nombre = 'Retiro';
 
-    SELECT ID, Saldo
-    INTO   v_saldo_bob_id, v_saldo_bob
+    SELECT ID, Saldo INTO v_saldo_bob_id, v_saldo_bob
     FROM   saldo_moneda
-    WHERE  ID_Cuenta = v_cuenta_id AND ID_Moneda = v_id_bob
-    LIMIT 1;
+    WHERE  ID_Cuenta = v_cuenta_id AND ID_Moneda = v_id_bob LIMIT 1;
 
     IF v_cuenta_id IS NULL THEN
         SET p_transaccion_id = -1;
@@ -531,14 +592,14 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro_conversion` (IN 
         START TRANSACTION;
 
         UPDATE saldo_moneda SET Saldo = Saldo - v_monto_bob WHERE ID = v_saldo_bob_id;
-        UPDATE Cuenta          SET Saldo = Saldo - v_monto_bob WHERE ID = v_cuenta_id;
 
         INSERT INTO Transacciones (
             ID_Cuenta_Transfiere, ID_Tipo_Transaccion, Monto,
             Saldo_anterior, Saldo_posterior, Metodo_transaccion, Estado, Descripcion
         ) VALUES (
             v_cuenta_id, v_tipo_retiro, v_monto_bob,
-            v_saldo_bob, (v_saldo_bob - v_monto_bob), p_metodo, 'exitosa',
+            v_saldo_bob, v_saldo_bob - v_monto_bob,
+            p_metodo, 'exitosa',
             CONCAT('Retiro (conv.) ', p_monto, ' ', v_codigo_moneda,
                    ' desde BOB | Tasa ', p_tipo_tasa, ': ', p_tasa_bob)
         );
@@ -557,11 +618,13 @@ END$$
 CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia` (IN `p_numero_cuenta_origen` VARCHAR(20), IN `p_numero_cuenta_destino` VARCHAR(20), IN `p_monto` DECIMAL(15,2), IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_descripcion` VARCHAR(255), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
     DECLARE v_cuenta_origen_id   INT;
     DECLARE v_cuenta_destino_id  INT;
-    DECLARE v_saldo_origen       DECIMAL(15,2);
-    DECLARE v_saldo_destino      DECIMAL(15,2);
+    DECLARE v_saldo_origen       DECIMAL(20,6) DEFAULT 0;
+    DECLARE v_saldo_bob_origen_id INT;
+    DECLARE v_saldo_bob_destino_id INT;
     DECLARE v_estado_origen      VARCHAR(20);
     DECLARE v_estado_destino     VARCHAR(20);
     DECLARE v_tipo_transferencia INT;
+    DECLARE v_id_bob             INT;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -570,69 +633,78 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia` (IN `p_n
         SET p_mensaje = 'Error interno: Transferencia cancelada.';
     END;
 
-    -- Resolver IDs a partir de los números de cuenta
-    SELECT ID, Saldo, Estado
-    INTO   v_cuenta_origen_id, v_saldo_origen, v_estado_origen
+    SELECT ID INTO v_id_bob FROM moneda WHERE Codigo = 'BOB' LIMIT 1;
+
+    SELECT ID, Estado INTO v_cuenta_origen_id, v_estado_origen
     FROM   Cuenta WHERE Numero_cuenta = p_numero_cuenta_origen LIMIT 1;
 
-    SELECT ID, Saldo, Estado
-    INTO   v_cuenta_destino_id, v_saldo_destino, v_estado_destino
+    SELECT ID, Estado INTO v_cuenta_destino_id, v_estado_destino
     FROM   Cuenta WHERE Numero_cuenta = p_numero_cuenta_destino LIMIT 1;
+
+    -- Saldo BOB origen
+    SELECT ID, Saldo INTO v_saldo_bob_origen_id, v_saldo_origen
+    FROM   saldo_moneda
+    WHERE  ID_Cuenta = v_cuenta_origen_id AND ID_Moneda = v_id_bob LIMIT 1;
+
+    -- ID saldo BOB destino
+    SELECT ID INTO v_saldo_bob_destino_id
+    FROM   saldo_moneda
+    WHERE  ID_Cuenta = v_cuenta_destino_id AND ID_Moneda = v_id_bob LIMIT 1;
 
     SELECT ID INTO v_tipo_transferencia FROM Tipo_Transaccion WHERE Nombre = 'Transferencia';
 
-    -- Validaciones
     IF v_cuenta_origen_id IS NULL THEN
-        SET p_transaccion_id = -1;
-        SET p_mensaje = 'Error: Cuenta origen no encontrada.';
+        SET p_transaccion_id = -1; SET p_mensaje = 'Error: Cuenta origen no encontrada.';
     ELSEIF v_cuenta_destino_id IS NULL THEN
-        SET p_transaccion_id = -1;
-        SET p_mensaje = 'Error: Cuenta destino no encontrada.';
+        SET p_transaccion_id = -1; SET p_mensaje = 'Error: Cuenta destino no encontrada.';
     ELSEIF v_cuenta_origen_id = v_cuenta_destino_id THEN
-        SET p_transaccion_id = -1;
-        SET p_mensaje = 'Error: La cuenta origen y destino no pueden ser la misma.';
+        SET p_transaccion_id = -1; SET p_mensaje = 'Error: La cuenta origen y destino no pueden ser la misma.';
     ELSEIF v_estado_origen != 'activa' THEN
-        SET p_transaccion_id = -1;
-        SET p_mensaje = 'Error: La cuenta origen no está activa.';
+        SET p_transaccion_id = -1; SET p_mensaje = 'Error: La cuenta origen no está activa.';
     ELSEIF v_estado_destino != 'activa' THEN
-        SET p_transaccion_id = -1;
-        SET p_mensaje = 'Error: La cuenta destino no está activa.';
+        SET p_transaccion_id = -1; SET p_mensaje = 'Error: La cuenta destino no está activa.';
     ELSEIF p_monto <= 0 THEN
-        SET p_transaccion_id = -1;
-        SET p_mensaje = 'Error: El monto debe ser mayor a 0.';
-    ELSEIF v_saldo_origen < p_monto THEN
-        SET p_transaccion_id = -1;
-        SET p_mensaje = 'Error: Saldo insuficiente.';
+        SET p_transaccion_id = -1; SET p_mensaje = 'Error: El monto debe ser mayor a 0.';
+    ELSEIF v_saldo_bob_origen_id IS NULL OR v_saldo_origen < p_monto THEN
+        SET p_transaccion_id = -1; SET p_mensaje = 'Error: Saldo insuficiente.';
     ELSE
         START TRANSACTION;
 
-        UPDATE Cuenta SET Saldo = Saldo - p_monto WHERE ID = v_cuenta_origen_id;
-        UPDATE Cuenta SET Saldo = Saldo + p_monto WHERE ID = v_cuenta_destino_id;
+        UPDATE saldo_moneda SET Saldo = Saldo - p_monto WHERE ID = v_saldo_bob_origen_id;
+
+        IF v_saldo_bob_destino_id IS NULL THEN
+            INSERT INTO saldo_moneda (ID_Cuenta, ID_Moneda, Saldo)
+            VALUES (v_cuenta_destino_id, v_id_bob, p_monto);
+        ELSE
+            UPDATE saldo_moneda SET Saldo = Saldo + p_monto WHERE ID = v_saldo_bob_destino_id;
+        END IF;
 
         INSERT INTO Transacciones (
             ID_Cuenta_Transfiere, ID_Cuenta_Transferida, ID_Tipo_Transaccion,
             Monto, Saldo_anterior, Saldo_posterior, Metodo_transaccion, Estado, Descripcion
         ) VALUES (
             v_cuenta_origen_id, v_cuenta_destino_id, v_tipo_transferencia,
-            p_monto, v_saldo_origen, (v_saldo_origen - p_monto), p_metodo, 'exitosa', p_descripcion
+            p_monto, v_saldo_origen, v_saldo_origen - p_monto,
+            p_metodo, 'exitosa', p_descripcion
         );
 
         SET p_transaccion_id = LAST_INSERT_ID();
         COMMIT;
-        SET p_mensaje = CONCAT('Transferencia exitosa. Nuevo saldo: ', (v_saldo_origen - p_monto));
+        SET p_mensaje = CONCAT('Transferencia exitosa. Nuevo saldo: ', v_saldo_origen - p_monto);
     END IF;
 END$$
 
 CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia_multimoneda` (IN `p_numero_cuenta_origen` VARCHAR(20), IN `p_numero_cuenta_destino` VARCHAR(20), IN `p_monto_origen` DECIMAL(20,6), IN `p_id_moneda_origen` INT, IN `p_monto_destino` DECIMAL(20,6), IN `p_id_moneda_destino` INT, IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_descripcion` VARCHAR(255), IN `p_tasa_origen_bob` DECIMAL(20,8), IN `p_tasa_destino_bob` DECIMAL(20,8), IN `p_tipo_tasa` ENUM('oficial','binance','manual'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
     DECLARE v_cuenta_origen_id     INT;
     DECLARE v_cuenta_destino_id    INT;
-    DECLARE v_saldo_origen_bob     DECIMAL(20,6);
-    DECLARE v_saldo_destino_bob    DECIMAL(20,6);
+    DECLARE v_saldo_origen_bob     DECIMAL(20,6) DEFAULT 0;
     DECLARE v_estado_origen        VARCHAR(20);
     DECLARE v_estado_destino       VARCHAR(20);
     DECLARE v_saldo_mon_origen_id  INT;
-    DECLARE v_saldo_mon_origen     DECIMAL(20,6);
+    DECLARE v_saldo_mon_origen     DECIMAL(20,6) DEFAULT 0;
     DECLARE v_saldo_mon_destino_id INT;
+    DECLARE v_saldo_bob_origen_id  INT;
+    DECLARE v_saldo_bob_destino_id INT;
     DECLARE v_tipo_transferencia   INT;
     DECLARE v_monto_bob            DECIMAL(20,6);
     DECLARE v_monto_bob_destino    DECIMAL(20,6);
@@ -640,6 +712,9 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia_multimone
     DECLARE v_codigo_destino       VARCHAR(10);
     DECLARE v_id_bob               INT;
 
+    -- Flag: ¿la transferencia implica conversión real de monedas?
+    DECLARE v_hay_conversion       TINYINT(1) DEFAULT 0;
+
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         ROLLBACK;
@@ -647,75 +722,128 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia_multimone
         SET p_mensaje = 'Error interno: Transferencia cancelada.';
     END;
 
-    SELECT ID    INTO v_id_bob          FROM moneda WHERE Codigo = 'BOB' LIMIT 1;
+    SELECT ID     INTO v_id_bob          FROM moneda WHERE Codigo = 'BOB' LIMIT 1;
     SELECT Codigo INTO v_codigo_origen   FROM moneda WHERE ID = p_id_moneda_origen  LIMIT 1;
     SELECT Codigo INTO v_codigo_destino  FROM moneda WHERE ID = p_id_moneda_destino LIMIT 1;
 
-    SELECT ID, Saldo, Estado
-    INTO   v_cuenta_origen_id, v_saldo_origen_bob, v_estado_origen
-    FROM   Cuenta WHERE Numero_cuenta = p_numero_cuenta_origen LIMIT 1;
+    -- ¿Hay conversión real? Solo cuando las monedas son distintas.
+    SET v_hay_conversion = IF(p_id_moneda_origen != p_id_moneda_destino, 1, 0);
 
-    SELECT ID, Saldo, Estado
-    INTO   v_cuenta_destino_id, v_saldo_destino_bob, v_estado_destino
+    SELECT ID, Estado INTO v_cuenta_origen_id,  v_estado_origen
+    FROM   Cuenta WHERE Numero_cuenta = p_numero_cuenta_origen  LIMIT 1;
+
+    SELECT ID, Estado INTO v_cuenta_destino_id, v_estado_destino
     FROM   Cuenta WHERE Numero_cuenta = p_numero_cuenta_destino LIMIT 1;
 
     SELECT ID INTO v_tipo_transferencia FROM Tipo_Transaccion WHERE Nombre = 'Transferencia';
 
-    SELECT ID, Saldo
-    INTO   v_saldo_mon_origen_id, v_saldo_mon_origen
+    -- Saldo en moneda origen
+    SELECT ID, Saldo INTO v_saldo_mon_origen_id, v_saldo_mon_origen
     FROM   saldo_moneda
-    WHERE  ID_Cuenta = v_cuenta_origen_id AND ID_Moneda = p_id_moneda_origen
-    LIMIT 1;
+    WHERE  ID_Cuenta = v_cuenta_origen_id AND ID_Moneda = p_id_moneda_origen LIMIT 1;
 
+    -- Saldo BOB origen (solo relevante si hay conversión)
+    SELECT ID, Saldo INTO v_saldo_bob_origen_id, v_saldo_origen_bob
+    FROM   saldo_moneda
+    WHERE  ID_Cuenta = v_cuenta_origen_id AND ID_Moneda = v_id_bob LIMIT 1;
+
+    -- Saldo moneda destino
     SELECT ID INTO v_saldo_mon_destino_id
     FROM   saldo_moneda
-    WHERE  ID_Cuenta = v_cuenta_destino_id AND ID_Moneda = p_id_moneda_destino
-    LIMIT 1;
+    WHERE  ID_Cuenta = v_cuenta_destino_id AND ID_Moneda = p_id_moneda_destino LIMIT 1;
 
+    -- Saldo BOB destino
+    SELECT ID INTO v_saldo_bob_destino_id
+    FROM   saldo_moneda
+    WHERE  ID_Cuenta = v_cuenta_destino_id AND ID_Moneda = v_id_bob LIMIT 1;
+
+    -- Equivalente BOB del monto origen
     IF p_id_moneda_origen = v_id_bob THEN
         SET v_monto_bob = p_monto_origen;
     ELSE
         SET v_monto_bob = p_monto_origen * p_tasa_origen_bob;
     END IF;
 
+    -- Equivalente BOB del monto destino
     IF p_id_moneda_destino = v_id_bob THEN
         SET v_monto_bob_destino = p_monto_destino;
     ELSE
         SET v_monto_bob_destino = p_monto_destino * p_tasa_destino_bob;
     END IF;
 
+    -- ── Validaciones ─────────────────────────────────────────────────────────
     IF v_cuenta_origen_id IS NULL THEN
-        SET p_transaccion_id = -1; SET p_mensaje = 'Error: Cuenta origen no encontrada.';
+        SET p_transaccion_id = -1;
+        SET p_mensaje = 'Error: Cuenta origen no encontrada.';
+
     ELSEIF v_cuenta_destino_id IS NULL THEN
-        SET p_transaccion_id = -1; SET p_mensaje = 'Error: Cuenta destino no encontrada.';
+        SET p_transaccion_id = -1;
+        SET p_mensaje = 'Error: Cuenta destino no encontrada.';
+
     ELSEIF v_cuenta_origen_id = v_cuenta_destino_id THEN
-        SET p_transaccion_id = -1; SET p_mensaje = 'Error: Origen y destino no pueden ser la misma cuenta.';
+        SET p_transaccion_id = -1;
+        SET p_mensaje = 'Error: Origen y destino no pueden ser la misma cuenta.';
+
     ELSEIF v_estado_origen != 'activa' THEN
-        SET p_transaccion_id = -1; SET p_mensaje = 'Error: La cuenta origen no está activa.';
+        SET p_transaccion_id = -1;
+        SET p_mensaje = 'Error: La cuenta origen no está activa.';
+
     ELSEIF v_estado_destino != 'activa' THEN
-        SET p_transaccion_id = -1; SET p_mensaje = 'Error: La cuenta destino no está activa.';
+        SET p_transaccion_id = -1;
+        SET p_mensaje = 'Error: La cuenta destino no está activa.';
+
     ELSEIF p_monto_origen <= 0 THEN
-        SET p_transaccion_id = -1; SET p_mensaje = 'Error: El monto debe ser mayor a 0.';
+        SET p_transaccion_id = -1;
+        SET p_mensaje = 'Error: El monto debe ser mayor a 0.';
+
     ELSEIF v_saldo_mon_origen_id IS NULL OR v_saldo_mon_origen < p_monto_origen THEN
         SET p_transaccion_id = -1;
         SET p_mensaje = CONCAT('Error: Saldo insuficiente en ', v_codigo_origen,
                                '. Disponible: ', IFNULL(v_saldo_mon_origen, 0));
-    ELSEIF v_saldo_origen_bob < v_monto_bob THEN
-        SET p_transaccion_id = -1; SET p_mensaje = 'Error: Saldo BOB insuficiente en la cuenta origen.';
+
+    -- ▸ CAMBIO 1: solo verificar BOB si hay conversión real entre monedas distintas
+    ELSEIF v_hay_conversion = 1
+        AND p_id_moneda_origen != v_id_bob
+        AND (v_saldo_bob_origen_id IS NULL OR v_saldo_origen_bob < v_monto_bob) THEN
+        SET p_transaccion_id = -1;
+        SET p_mensaje = 'Error: Saldo BOB insuficiente en la cuenta origen.';
+
     ELSE
         START TRANSACTION;
 
-        UPDATE saldo_moneda SET Saldo = Saldo - p_monto_origen WHERE ID = v_saldo_mon_origen_id;
-        UPDATE Cuenta          SET Saldo = Saldo - v_monto_bob   WHERE ID = v_cuenta_origen_id;
+        -- Descontar moneda origen
+        UPDATE saldo_moneda
+        SET    Saldo = Saldo - p_monto_origen
+        WHERE  ID = v_saldo_mon_origen_id;
 
+        -- ▸ CAMBIO 2: descontar BOB espejo solo si hay conversión real
+        IF v_hay_conversion = 1 AND p_id_moneda_origen != v_id_bob THEN
+            UPDATE saldo_moneda
+            SET    Saldo = Saldo - v_monto_bob
+            WHERE  ID = v_saldo_bob_origen_id;
+        END IF;
+
+        -- Acreditar moneda destino
         IF v_saldo_mon_destino_id IS NULL THEN
             INSERT INTO saldo_moneda (ID_Cuenta, ID_Moneda, Saldo)
             VALUES (v_cuenta_destino_id, p_id_moneda_destino, p_monto_destino);
         ELSE
-            UPDATE saldo_moneda SET Saldo = Saldo + p_monto_destino WHERE ID = v_saldo_mon_destino_id;
+            UPDATE saldo_moneda
+            SET    Saldo = Saldo + p_monto_destino
+            WHERE  ID = v_saldo_mon_destino_id;
         END IF;
 
-        UPDATE Cuenta SET Saldo = Saldo + v_monto_bob_destino WHERE ID = v_cuenta_destino_id;
+        -- Acreditar BOB espejo en destino solo si hay conversión real
+        IF v_hay_conversion = 1 AND p_id_moneda_destino != v_id_bob THEN
+            IF v_saldo_bob_destino_id IS NULL THEN
+                INSERT INTO saldo_moneda (ID_Cuenta, ID_Moneda, Saldo)
+                VALUES (v_cuenta_destino_id, v_id_bob, v_monto_bob_destino);
+            ELSE
+                UPDATE saldo_moneda
+                SET    Saldo = Saldo + v_monto_bob_destino
+                WHERE  ID = v_saldo_bob_destino_id;
+            END IF;
+        END IF;
 
         INSERT INTO Transacciones (
             ID_Cuenta_Transfiere, ID_Cuenta_Transferida, ID_Tipo_Transaccion,
@@ -723,28 +851,40 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia_multimone
             Metodo_transaccion, Estado, Descripcion
         ) VALUES (
             v_cuenta_origen_id, v_cuenta_destino_id, v_tipo_transferencia,
-            v_monto_bob, v_saldo_origen_bob, (v_saldo_origen_bob - v_monto_bob),
+            v_monto_bob,
+            IFNULL(v_saldo_origen_bob, v_saldo_mon_origen),
+            IFNULL(v_saldo_origen_bob, v_saldo_mon_origen) - v_monto_bob,
             p_metodo, 'exitosa',
-            CONCAT(IFNULL(p_descripcion, 'Transferencia'),
-                   ' | ', p_monto_origen, ' ', v_codigo_origen,
-                   ' → ', p_monto_destino, ' ', v_codigo_destino,
-                   ' | Tasa ', p_tipo_tasa)
+            CONCAT(
+                IFNULL(p_descripcion, 'Transferencia'),
+                ' | ', p_monto_origen, ' ', v_codigo_origen,
+                ' → ', p_monto_destino, ' ', v_codigo_destino,
+                ' | Tasa ', p_tipo_tasa
+            )
         );
 
         SET p_transaccion_id = LAST_INSERT_ID();
         COMMIT;
+
         SET p_mensaje = CONCAT(
             'Transferencia exitosa. ',
             p_monto_origen, ' ', v_codigo_origen,
             ' → ', p_monto_destino, ' ', v_codigo_destino,
-            ' | Nuevo saldo BOB origen: ', ROUND(v_saldo_origen_bob - v_monto_bob, 2)
+            IF(v_hay_conversion = 1,
+               CONCAT(' | Nuevo saldo BOB origen: ',
+                      ROUND(IFNULL(v_saldo_origen_bob, 0) - v_monto_bob, 2)),
+               CONCAT(' | Nuevo saldo ', v_codigo_origen, ': ',
+                      ROUND(v_saldo_mon_origen - p_monto_origen, 6))
+            )
         );
     END IF;
 END$$
 
 CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_registrar_usuario` (IN `p_nombre` VARCHAR(100), IN `p_apellido` VARCHAR(100), IN `p_direccion` VARCHAR(255), IN `p_telefono` VARCHAR(20), IN `p_edad` INT, IN `p_correo` VARCHAR(150), IN `p_contrasena` VARCHAR(255), IN `p_id_rol` INT, IN `p_numero_cuenta` VARCHAR(20), IN `p_tipo_cuenta` ENUM('ahorro','corriente'), IN `p_saldo_inicial` DECIMAL(15,2), IN `p_numero_tarjeta` VARCHAR(16), IN `p_pin` VARCHAR(255), IN `p_tipo_tarjeta` ENUM('debito','credito'), IN `p_fecha_vencimiento` DATE, OUT `p_usuario_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
     DECLARE v_persona_id INT;
-    DECLARE v_cuenta_id INT;
+    DECLARE v_cuenta_id  INT;
+    DECLARE v_id_bob     INT;
+
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         ROLLBACK;
@@ -752,35 +892,36 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_registrar_usuario` (IN `p_nombre
         SET p_mensaje = 'Error: No se pudo registrar el usuario. Verifique los datos.';
     END;
 
-    -- Validaciones previas
     IF EXISTS (SELECT 1 FROM Users WHERE Correo = p_correo) THEN
-        SET p_usuario_id = -1;
-        SET p_mensaje = 'Error: El correo ya está registrado.';
+        SET p_usuario_id = -1; SET p_mensaje = 'Error: El correo ya está registrado.';
     ELSEIF EXISTS (SELECT 1 FROM Cuenta WHERE Numero_cuenta = p_numero_cuenta) THEN
-        SET p_usuario_id = -1;
-        SET p_mensaje = 'Error: El número de cuenta ya existe.';
+        SET p_usuario_id = -1; SET p_mensaje = 'Error: El número de cuenta ya existe.';
     ELSEIF EXISTS (SELECT 1 FROM Tarjeta WHERE Numero_tarjeta = p_numero_tarjeta) THEN
-        SET p_usuario_id = -1;
-        SET p_mensaje = 'Error: El número de tarjeta ya existe.';
+        SET p_usuario_id = -1; SET p_mensaje = 'Error: El número de tarjeta ya existe.';
     ELSE
+        SELECT ID INTO v_id_bob FROM moneda WHERE Codigo = 'BOB' LIMIT 1;
+
         START TRANSACTION;
 
-        -- 1. Insertar Persona
         INSERT INTO Persona (Nombre, Apellido, Direccion, Telefono, Edad)
         VALUES (p_nombre, p_apellido, p_direccion, p_telefono, p_edad);
         SET v_persona_id = LAST_INSERT_ID();
 
-        -- 2. Insertar User
         INSERT INTO Users (ID_Persona, ID_Rol, Correo, Contrasena)
         VALUES (v_persona_id, p_id_rol, p_correo, p_contrasena);
         SET p_usuario_id = LAST_INSERT_ID();
 
-        -- 3. Insertar Cuenta
-        INSERT INTO Cuenta (Numero_cuenta, ID_Users, Tipo_cuenta, Saldo)
-        VALUES (p_numero_cuenta, p_usuario_id, p_tipo_cuenta, p_saldo_inicial);
+        -- Cuenta sin columna Saldo
+        INSERT INTO Cuenta (Numero_cuenta, ID_Users, Tipo_cuenta)
+        VALUES (p_numero_cuenta, p_usuario_id, p_tipo_cuenta);
         SET v_cuenta_id = LAST_INSERT_ID();
 
-        -- 4. Insertar Tarjeta
+        -- Saldo inicial va en saldo_moneda
+        IF p_saldo_inicial > 0 THEN
+            INSERT INTO saldo_moneda (ID_Cuenta, ID_Moneda, Saldo)
+            VALUES (v_cuenta_id, v_id_bob, p_saldo_inicial);
+        END IF;
+
         INSERT INTO Tarjeta (ID_Users, ID_Cuenta, Numero_tarjeta, Pin, Tipo_tarjeta, Fecha_vencimiento)
         VALUES (p_usuario_id, v_cuenta_id, p_numero_tarjeta, p_pin, p_tipo_tarjeta, p_fecha_vencimiento);
 
@@ -791,14 +932,14 @@ END$$
 
 CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_saldos_cuenta` (IN `p_numero_cuenta` VARCHAR(20))   BEGIN
     SELECT
-        sm.Codigo_moneda,
+        m.Codigo              AS Codigo_moneda,
         m.Nombre              AS nombre_moneda,
         m.Simbolo,
         sm.Saldo,
         sm.Fecha_modificacion AS ultima_actualizacion
     FROM   saldo_moneda sm
-    INNER JOIN moneda m ON sm.Codigo_moneda = m.Codigo
-    INNER JOIN cuenta  c ON sm.ID_Cuenta    = c.ID
+    INNER JOIN moneda m ON sm.ID_Moneda  = m.ID
+    INNER JOIN cuenta  c ON sm.ID_Cuenta = c.ID
     WHERE  c.Numero_cuenta = p_numero_cuenta
     ORDER BY sm.Saldo DESC;
 END$$
@@ -975,10 +1116,12 @@ CREATE TABLE `saldo_moneda` (
 --
 
 INSERT INTO `saldo_moneda` (`ID`, `ID_Cuenta`, `ID_Moneda`, `Saldo`, `Fecha_creacion`, `Fecha_modificacion`) VALUES
-(2, 6, 1, 1000.000000, '2026-03-14 18:22:57', '2026-03-14 21:05:09'),
+(2, 6, 1, 499.000000, '2026-03-14 18:22:57', '2026-03-15 10:08:29'),
 (3, 7, 1, 0.000000, '2026-03-14 18:22:57', '2026-03-14 21:05:09'),
 (4, 8, 1, 0.000000, '2026-03-14 18:22:57', '2026-03-14 21:05:09'),
-(10, 9, 1, 99999999999999.999999, '2026-03-14 20:49:17', '2026-03-14 21:05:09');
+(10, 9, 1, 7294.000000, '2026-03-14 20:49:17', '2026-03-15 10:09:13'),
+(11, 9, 2, 1053.446372, '2026-03-14 23:00:43', '2026-03-15 10:07:41'),
+(12, 6, 2, 13.000000, '2026-03-15 09:43:29', '2026-03-15 09:43:29');
 
 -- --------------------------------------------------------
 
@@ -1068,10 +1211,10 @@ CREATE TABLE `tasa_cambio_cache` (
 --
 
 INSERT INTO `tasa_cambio_cache` (`ID`, `Moneda_origen`, `Moneda_destino`, `Tasa`, `Tipo_tasa`, `Fecha_actualizacion`) VALUES
-(1, 'BOB', 'USD', 0.14367816, 'oficial', '2026-03-14 21:46:29'),
-(2, 'USD', 'BOB', 6.96000000, 'oficial', '2026-03-14 21:46:29'),
-(3, 'BOB', 'USD', 0.10593220, 'binance', '2026-03-14 21:46:29'),
-(4, 'USD', 'BOB', 9.44000000, 'binance', '2026-03-14 21:46:29');
+(1, 'BOB', 'USD', 0.14367816, 'oficial', '2026-03-15 10:07:41'),
+(2, 'USD', 'BOB', 6.96000000, 'oficial', '2026-03-15 10:07:41'),
+(3, 'BOB', 'USD', 0.10615711, 'binance', '2026-03-15 10:07:41'),
+(4, 'USD', 'BOB', 9.42000000, 'binance', '2026-03-15 10:07:41');
 
 -- --------------------------------------------------------
 
@@ -1124,7 +1267,24 @@ CREATE TABLE `transacciones` (
 
 INSERT INTO `transacciones` (`ID`, `ID_Cuenta_Transfiere`, `ID_Cuenta_Transferida`, `ID_Tipo_Transaccion`, `Monto`, `Saldo_anterior`, `Saldo_posterior`, `Metodo_transaccion`, `Estado`, `Descripcion`, `Fecha_transaccion`, `Fecha_creacion`, `Fecha_modificacion`) VALUES
 (14, 9, NULL, 2, 9999999999999.99, 0.00, 9999999999999.99, 'ATM', 'exitosa', 'Depósito en BOB | Tasa oficial: 1.00000000', '2026-03-14 20:49:17', '2026-03-14 20:49:17', '2026-03-14 20:49:17'),
-(15, 9, NULL, 2, 9999999999999.99, 9999999999999.99, 9999999999999.99, 'ATM', 'exitosa', 'Depósito en BOB | Tasa oficial: 1.00000000', '2026-03-14 20:49:56', '2026-03-14 20:49:56', '2026-03-14 20:49:56');
+(15, 9, NULL, 2, 9999999999999.99, 9999999999999.99, 9999999999999.99, 'ATM', 'exitosa', 'Depósito en BOB | Tasa oficial: 1.00000000', '2026-03-14 20:49:56', '2026-03-14 20:49:56', '2026-03-14 20:49:56'),
+(16, 9, NULL, 1, 100.00, 9999999999999.99, 9999999999999.99, 'ATM', 'exitosa', 'Retiro directo en BOB | Tasa oficial: 1.00000000', '2026-03-14 22:52:20', '2026-03-14 22:52:20', '2026-03-14 22:52:20'),
+(17, 9, NULL, 1, 100.00, 9999999999999.99, 9999999999999.99, 'ATM', 'exitosa', 'Retiro directo en BOB | Tasa oficial: 1.00000000', '2026-03-14 22:52:38', '2026-03-14 22:52:38', '2026-03-14 22:52:38'),
+(18, 9, NULL, 1, 348.00, 9999999999999.99, 9999999999999.99, 'ATM', 'exitosa', 'Retiro (conv.) 50.000000 USD desde BOB | Tasa oficial: 6.96000000', '2026-03-14 22:55:13', '2026-03-14 22:55:13', '2026-03-14 22:55:13'),
+(19, 9, NULL, 2, 500.00, 9999999999999.99, 9999999999999.99, 'ATM', 'exitosa', 'Depósito 500.000000 BOB → 500.000000 BOB | Tasa oficial: 1.00000000', '2026-03-14 22:57:26', '2026-03-14 22:57:26', '2026-03-14 22:57:26'),
+(20, 9, NULL, 2, 100.00, 9999999999999.99, 9999999999999.99, 'ATM', 'exitosa', 'Depósito 100.000000 USD → 944.000000 BOB | Tasa binance: 9.44000000', '2026-03-14 22:58:11', '2026-03-14 22:58:11', '2026-03-14 22:58:11'),
+(21, 6, 9, 3, 200.00, 1000.00, 800.00, 'ATM', 'exitosa', 'Pago de deuda | 200.000000 BOB → 200.000000 BOB | Tasa oficial', '2026-03-14 23:00:22', '2026-03-14 23:00:22', '2026-03-14 23:00:22'),
+(22, 6, 9, 3, 100.00, 800.00, 700.00, 'web', 'exitosa', 'Transferencia internacional | 100.000000 BOB → 14.367816 USD | Tasa oficial', '2026-03-14 23:00:43', '2026-03-14 23:00:43', '2026-03-14 23:00:43'),
+(23, 6, 9, 3, 472.00, 700.00, 228.00, 'ATM', 'exitosa', 'Conversión confirmada | 472.000000 BOB → 472.000000 BOB | Tasa binance', '2026-03-14 23:01:17', '2026-03-14 23:01:17', '2026-03-14 23:01:17'),
+(24, 9, 6, 3, 471.00, 9999999999999.99, 9999999999999.99, 'ATM', 'exitosa', 'Conversión confirmada | 471.000000 BOB → 471.000000 BOB | Tasa binance', '2026-03-15 08:27:17', '2026-03-15 08:27:17', '2026-03-15 08:27:17'),
+(25, 9, 6, 3, 122.46, 0.00, -122.46, 'ATM', 'exitosa', 'Conversión confirmada | 13.000000 USD → 13.000000 USD | Tasa binance', '2026-03-15 09:43:29', '2026-03-15 09:43:29', '2026-03-15 09:43:29'),
+(26, 9, NULL, 1, 6.96, 0.00, -6.96, 'ATM', 'exitosa', 'Retiro directo en USD | Tasa oficial: 6.96000000', '2026-03-15 09:57:59', '2026-03-15 09:57:59', '2026-03-15 09:57:59'),
+(27, 9, NULL, 2, 4710.00, 0.00, 4710.00, 'ATM', 'exitosa', 'Depósito 500.000000 USD → 500.000000 USD | Tasa binance: 9.42000000', '2026-03-15 10:01:05', '2026-03-15 10:01:05', '2026-03-15 10:01:05'),
+(28, 9, NULL, 2, 500.00, 500.37, 1000.37, 'ATM', 'exitosa', 'Depósito directo 500.000000 USD', '2026-03-15 10:07:19', '2026-03-15 10:07:19', '2026-03-15 10:07:19'),
+(29, 9, NULL, 2, 500.00, 1000.37, 1053.45, 'ATM', 'exitosa', 'Depósito 500.000000 BOB → 53.078556 USD | Tasa binance: 1.00000000', '2026-03-15 10:07:41', '2026-03-15 10:07:41', '2026-03-15 10:07:41'),
+(30, 9, NULL, 2, 942.00, 5210.00, 6152.00, 'ATM', 'exitosa', 'Depósito 100.000000 USD → 942.000000 BOB | Tasa binance: 9.42000000', '2026-03-15 10:08:09', '2026-03-15 10:08:09', '2026-03-15 10:08:09'),
+(31, 6, 9, 3, 200.00, 699.00, 499.00, 'ATM', 'exitosa', 'Pago de deuda | 200.000000 BOB → 200.000000 BOB | Tasa oficial', '2026-03-15 10:08:29', '2026-03-15 10:08:29', '2026-03-15 10:08:29'),
+(32, 9, NULL, 2, 942.00, 6352.00, 7294.00, 'ATM', 'exitosa', 'Depósito 100.000000 USD → 942.000000 BOB | Tasa binance: 9.42000000', '2026-03-15 10:09:13', '2026-03-15 10:09:13', '2026-03-15 10:09:13');
 
 -- --------------------------------------------------------
 
@@ -1160,6 +1320,21 @@ INSERT INTO `users` (`ID`, `ID_Persona`, `ID_Rol`, `Correo`, `Contrasena`, `Esta
 -- (Véase abajo para la vista actual)
 --
 CREATE TABLE `vista_cuentas_resumen` (
+`cuenta_id` int(11)
+,`Numero_cuenta` varchar(20)
+,`Tipo_cuenta` enum('ahorro','corriente')
+,`saldo_bob` decimal(20,6)
+,`estado_cuenta` enum('activa','bloqueada','cerrada')
+,`fecha_apertura` datetime
+,`usuario_id` int(11)
+,`nombre_titular` varchar(201)
+,`Correo` varchar(150)
+,`Numero_tarjeta` varchar(16)
+,`Tipo_tarjeta` enum('debito','credito')
+,`estado_tarjeta` enum('activa','bloqueada','vencida','cancelada')
+,`Fecha_vencimiento` date
+,`Codigo_moneda` varchar(10)
+,`saldo_moneda` decimal(20,6)
 );
 
 -- --------------------------------------------------------
@@ -1244,7 +1419,7 @@ CREATE TABLE `vista_usuarios_completo` (
 --
 DROP TABLE IF EXISTS `vista_cuentas_resumen`;
 
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `vista_cuentas_resumen`  AS SELECT `c`.`ID` AS `cuenta_id`, `c`.`Numero_cuenta` AS `Numero_cuenta`, `c`.`Tipo_cuenta` AS `Tipo_cuenta`, `c`.`Saldo` AS `saldo_bob`, `c`.`Estado` AS `estado_cuenta`, `c`.`Fecha_creacion` AS `fecha_apertura`, `u`.`ID` AS `usuario_id`, concat(`p`.`Nombre`,' ',`p`.`Apellido`) AS `nombre_titular`, `u`.`Correo` AS `Correo`, `tar`.`Numero_tarjeta` AS `Numero_tarjeta`, `tar`.`Tipo_tarjeta` AS `Tipo_tarjeta`, `tar`.`Estado` AS `estado_tarjeta`, `tar`.`Fecha_vencimiento` AS `Fecha_vencimiento`, `sm`.`Codigo_moneda` AS `Codigo_moneda`, `sm`.`Saldo` AS `saldo_moneda` FROM ((((`cuenta` `c` join `users` `u` on(`c`.`ID_Users` = `u`.`ID`)) join `persona` `p` on(`u`.`ID_Persona` = `p`.`ID`)) left join `tarjeta` `tar` on(`tar`.`ID_Cuenta` = `c`.`ID`)) left join `saldo_moneda` `sm` on(`sm`.`ID_Cuenta` = `c`.`ID`)) ;
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `vista_cuentas_resumen`  AS SELECT `c`.`ID` AS `cuenta_id`, `c`.`Numero_cuenta` AS `Numero_cuenta`, `c`.`Tipo_cuenta` AS `Tipo_cuenta`, `sm`.`Saldo` AS `saldo_bob`, `c`.`Estado` AS `estado_cuenta`, `c`.`Fecha_creacion` AS `fecha_apertura`, `u`.`ID` AS `usuario_id`, concat(`p`.`Nombre`,' ',`p`.`Apellido`) AS `nombre_titular`, `u`.`Correo` AS `Correo`, `tar`.`Numero_tarjeta` AS `Numero_tarjeta`, `tar`.`Tipo_tarjeta` AS `Tipo_tarjeta`, `tar`.`Estado` AS `estado_tarjeta`, `tar`.`Fecha_vencimiento` AS `Fecha_vencimiento`, `m`.`Codigo` AS `Codigo_moneda`, `sm`.`Saldo` AS `saldo_moneda` FROM (((((`cuenta` `c` join `users` `u` on(`c`.`ID_Users` = `u`.`ID`)) join `persona` `p` on(`u`.`ID_Persona` = `p`.`ID`)) left join `tarjeta` `tar` on(`tar`.`ID_Cuenta` = `c`.`ID`)) left join `saldo_moneda` `sm` on(`sm`.`ID_Cuenta` = `c`.`ID`)) left join `moneda` `m` on(`sm`.`ID_Moneda` = `m`.`ID`)) ;
 
 -- --------------------------------------------------------
 
@@ -1429,7 +1604,7 @@ ALTER TABLE `rol`
 -- AUTO_INCREMENT de la tabla `saldo_moneda`
 --
 ALTER TABLE `saldo_moneda`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT de la tabla `sesion_atm`
@@ -1453,7 +1628,7 @@ ALTER TABLE `tasa_cambio`
 -- AUTO_INCREMENT de la tabla `tasa_cambio_cache`
 --
 ALTER TABLE `tasa_cambio_cache`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=54;
 
 --
 -- AUTO_INCREMENT de la tabla `tipo_transaccion`
@@ -1465,7 +1640,7 @@ ALTER TABLE `tipo_transaccion`
 -- AUTO_INCREMENT de la tabla `transacciones`
 --
 ALTER TABLE `transacciones`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=33;
 
 --
 -- AUTO_INCREMENT de la tabla `users`

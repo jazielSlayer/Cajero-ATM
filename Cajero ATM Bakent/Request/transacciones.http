@@ -7,9 +7,10 @@ Content-Type: application/json
 {
   "numero_tarjeta": "4520899596991226",
   "pin": "5241",
-  "monto": 100,
-  "moneda": "BOB",
-  "tipo_tasa": "oficial",
+  "monto": 1,
+  "moneda": "USD",
+  "moneda_salida": "USD",
+  "tipo_tasa": "binance",
   "metodo": "ATM",
   "confirmar_conversion": true
 }
@@ -21,7 +22,7 @@ Content-Type: application/json
 {
   "numero_tarjeta": "4520899596991226",
   "pin": "5241",
-  "monto": 50,
+  "monto": 1,
   "moneda": "USD",
   "tipo_tasa": "oficial",
   "metodo": "ATM",
@@ -39,8 +40,8 @@ Content-Type: application/json
   "pin": "5241",
   "monto": 500,
   "moneda_origen": "BOB",
-  "moneda_destino": "BOB",
-  "tipo_tasa": "oficial",
+  "moneda_destino": "USD",
+  "tipo_tasa": "binance",
   "metodo": "ATM"
 }
 
@@ -97,11 +98,11 @@ POST {{api}}/transferencia
 Content-Type: application/json
 
 {
-  "numero_de_cuenta": "63788349202",
-  "numero_cuenta_destino": "3520899553795811",
-  "monto": 50,
+  "numero_de_cuenta": "3520899553795811",
+  "numero_cuenta_destino": "63788349202",
+  "monto": 13,
   "moneda_origen": "USD",
-  "moneda_destino": "BOB",
+  "moneda_destino": "USD",
   "tipo_tasa": "binance",
   "metodo": "ATM",
   "descripcion": "Conversión confirmada",

@@ -22,6 +22,8 @@ export const DatosUsuario = async (req, res) => {
 
         const depositos          = transacciones.filter(t => t.tipo_transaccion === 'Deposito');
         const otrasTransacciones = transacciones.filter(t => t.tipo_transaccion !== 'Deposito');
+        const retiros          = transacciones.filter(t => t.tipo_transaccion === 'Retiro');
+        const transferencias          = transacciones.filter(t => t.tipo_transaccion === 'Transferencia');
 
         return res.json({
             usuario: {
@@ -46,7 +48,7 @@ export const DatosUsuario = async (req, res) => {
                 },
             },
             transacciones: otrasTransacciones,
-            depositos,
+            depositos,retiros, transferencias
         });
 
     } catch (err) {

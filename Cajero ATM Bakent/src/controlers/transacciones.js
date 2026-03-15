@@ -15,41 +15,44 @@ async function getIdMoneda(connection, codigo) {
     return row ? row.ID : null;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  realizarRetiro
-// ─────────────────────────────────────────────────────────────────────────────
 export const realizarRetiro = async (req, res) => {
     const {
         numero_tarjeta,
         pin,
         monto,
-        moneda               = "BOB",
+        moneda               = "BOB",   // moneda en que se expresa el monto
+        moneda_salida        = null,     // moneda en que quiere recibir el efectivo
         tipo_tasa            = "oficial",
         metodo               = "ATM",
         confirmar_conversion = false,
     } = req.body;
-
+ 
     if (!numero_tarjeta || !pin || !monto) {
         return res.status(400).json({
             error: "Faltan campos requeridos: numero_tarjeta, pin, monto.",
         });
     }
-
-    const monedaUpper = moneda.toUpperCase();
+ 
+    const monedaUpper       = moneda.toUpperCase();
+    const monedaSalidaUpper = moneda_salida ? moneda_salida.toUpperCase() : null;
+ 
     if (!MONEDAS_SOPORTADAS.has(monedaUpper)) {
         return res.status(400).json({ error: `Moneda no soportada: ${moneda}.` });
+    }
+    if (monedaSalidaUpper && !MONEDAS_SOPORTADAS.has(monedaSalidaUpper)) {
+        return res.status(400).json({ error: `Moneda de salida no soportada: ${moneda_salida}.` });
     }
     if (!["oficial", "binance"].includes(tipo_tasa)) {
         return res.status(400).json({ error: "tipo_tasa debe ser 'oficial' o 'binance'." });
     }
-
+ 
     const montoNum = parseFloat(monto);
     if (isNaN(montoNum) || montoNum <= 0) {
         return res.status(400).json({ error: "El monto debe ser un número mayor a 0." });
     }
-
+ 
     const connection = await connect();
-
+ 
     try {
         // ── 1. Verificar tarjeta y PIN ────────────────────────────────────────
         const [[tarjeta]] = await connection.query(
@@ -63,35 +66,105 @@ export const realizarRetiro = async (req, res) => {
         }
         const pinOk = await bcrypt.compare(String(pin), tarjeta.pin_hash);
         if (!pinOk) return res.status(401).json({ error: "PIN incorrecto." });
-
+ 
         // ── 2. Resolver IDs de moneda ─────────────────────────────────────────
         const idMoneda = await getIdMoneda(connection, monedaUpper);
         if (!idMoneda) {
             return res.status(400).json({ error: `Moneda no encontrada en BD: ${monedaUpper}.` });
         }
         const idBOB = await getIdMoneda(connection, "BOB");
-
-        // ── 3. Consultar saldo en la moneda solicitada ────────────────────────
+ 
+        // ── 3. Saldo en la moneda del monto solicitado ────────────────────────
         const [[saldoMoneda]] = await connection.query(
             `SELECT sm.ID, sm.Saldo
              FROM   saldo_moneda sm
              WHERE  sm.ID_Cuenta = ? AND sm.ID_Moneda = ?`,
             [tarjeta.cuenta_id, idMoneda]
         );
-
-        const tieneSaldoDirecto = saldoMoneda && parseFloat(saldoMoneda.Saldo) >= montoNum;
-
-        // ── 4a. Retiro directo ────────────────────────────────────────────────
-        if (tieneSaldoDirecto) {
-            let tasa = 1;
-            if (monedaUpper !== "BOB") tasa = await getTasaBOB(monedaUpper, tipo_tasa);
-            const montoBOB = parseFloat((montoNum * tasa).toFixed(2));
-
+ 
+        // ── 4. Todos los saldos de la cuenta (para mostrar opciones) ──────────
+        const [saldosCuenta] = await connection.query(
+            `SELECT m.Codigo, m.Nombre, m.Simbolo, sm.Saldo
+             FROM   saldo_moneda sm
+             INNER JOIN moneda m ON sm.ID_Moneda = m.ID
+             WHERE  sm.ID_Cuenta = ? AND sm.Saldo > 0
+             ORDER BY sm.Saldo DESC`,
+            [tarjeta.cuenta_id]
+        );
+ 
+        // ── 5. Si NO especificó moneda_salida → preguntar ─────────────────────
+        if (!monedaSalidaUpper) {
+            // Calcular cuánto recibiría en cada moneda disponible
+            const opciones = await Promise.all(
+                saldosCuenta.map(async (s) => {
+                    let montoEnEstaMoneda = montoNum;
+                    let tasa = 1;
+ 
+                    if (monedaUpper !== s.Codigo) {
+                        // Convertir monto a BOB primero, luego a la moneda de salida
+                        const tasaOrigenBOB  = monedaUpper  === "BOB" ? 1 : await getTasaBOB(monedaUpper,  tipo_tasa);
+                        const tasaDestinoBOB = s.Codigo     === "BOB" ? 1 : await getTasaBOB(s.Codigo,     tipo_tasa);
+                        const montoBOB = montoNum * tasaOrigenBOB;
+                        montoEnEstaMoneda = parseFloat((montoBOB / tasaDestinoBoB).toFixed(6));
+                        tasa = tasaOrigenBOB;
+                    }
+ 
+                    const suficiente = parseFloat(s.Saldo) >= montoEnEstaMoneda;
+                    return {
+                        moneda:            s.Codigo,
+                        nombre:            s.Nombre,
+                        simbolo:           s.Simbolo,
+                        saldo_disponible:  parseFloat(s.Saldo),
+                        monto_a_recibir:   montoEnEstaMoneda,
+                        suficiente,
+                        tasa_aplicada:     tasa,
+                    };
+                })
+            );
+ 
+            return res.status(202).json({
+                requiere_seleccion_moneda: true,
+                mensaje: `Seleccione en qué moneda desea retirar ${montoNum} ${monedaUpper}.`,
+                saldo_solicitado: `${montoNum} ${monedaUpper}`,
+                opciones_disponibles: opciones,
+                instruccion: "Reenvíe la solicitud incluyendo el campo 'moneda_salida' con la moneda elegida.",
+            });
+        }
+ 
+        // ── 6. Tiene moneda_salida especificada ───────────────────────────────
+        const idMonedaSalida = await getIdMoneda(connection, monedaSalidaUpper);
+        if (!idMonedaSalida) {
+            return res.status(400).json({ error: `Moneda de salida no encontrada en BD: ${monedaSalidaUpper}.` });
+        }
+ 
+        // Calcular tasas
+        const tasaMonedaBOB  = monedaUpper       === "BOB" ? 1 : await getTasaBOB(monedaUpper,       tipo_tasa);
+        const tasaSalidaBOB  = monedaSalidaUpper === "BOB" ? 1 : await getTasaBOB(monedaSalidaUpper, tipo_tasa);
+ 
+        // Monto en BOB (valor real de la transacción)
+        const montoBOB = parseFloat((montoNum * tasaMonedaBOB).toFixed(2));
+ 
+        // Monto a descontar en moneda de salida
+        const montoEnSalida = monedaUpper === monedaSalidaUpper
+            ? montoNum
+            : parseFloat((montoBOB / tasaSalidaBOB).toFixed(6));
+ 
+        // Saldo disponible en la moneda de salida
+        const [[saldoSalida]] = await connection.query(
+            `SELECT sm.ID, sm.Saldo
+             FROM   saldo_moneda sm
+             WHERE  sm.ID_Cuenta = ? AND sm.ID_Moneda = ?`,
+            [tarjeta.cuenta_id, idMonedaSalida]
+        );
+        const saldoSalidaNum = saldoSalida ? parseFloat(saldoSalida.Saldo) : 0;
+ 
+        // ── 6a. Tiene saldo directo en moneda_salida ──────────────────────────
+        if (saldoSalidaNum >= montoEnSalida) {
             await connection.query("SET @transaccion_id = 0;");
             await connection.query("SET @mensaje = '';");
             await connection.query(
                 "CALL sp_realizar_retiro(?, ?, ?, ?, ?, ?, @transaccion_id, @mensaje)",
-                [tarjeta.pin_hash, montoNum, idMoneda, metodo, tasa, tipo_tasa]
+                [tarjeta.pin_hash, montoEnSalida, idMonedaSalida, metodo, tasaSalidaBOB, tipo_tasa]
             );
             const [[output]] = await connection.query(
                 "SELECT @transaccion_id AS transaccion_id, @mensaje AS mensaje"
@@ -102,68 +175,58 @@ export const realizarRetiro = async (req, res) => {
             return res.json({
                 transaccionId: output.transaccion_id,
                 mensaje: output.mensaje,
-                conversion: false,
+                conversion: monedaUpper !== monedaSalidaUpper,
                 detalle: {
-                    montoRetirado:  `${montoNum} ${monedaUpper}`,
-                    equivalenteBOB: `${montoBOB} BOB`,
-                    tasa: { valor: tasa, tipo: tipo_tasa },
+                    montoSolicitado: `${montoNum} ${monedaUpper}`,
+                    montoRetirado:   `${montoEnSalida} ${monedaSalidaUpper}`,
+                    equivalenteBOB:  `${montoBOB} BOB`,
+                    tasa: { valor: tasaSalidaBOB, tipo: tipo_tasa },
                 },
             });
         }
-
-        // ── 4b. No tiene saldo en esa moneda ──────────────────────────────────
-        if (monedaUpper === "BOB") {
-            return res.status(400).json({
-                error: `Saldo insuficiente en BOB. Disponible: ${saldoMoneda ? saldoMoneda.Saldo : 0} BOB.`,
-            });
-        }
-
-        // Tasa: cuántos BOB necesito para obtener 1 unidad de la moneda pedida
-        const tasaBOBaMoneda = await getTasaBOB(monedaUpper, tipo_tasa);
-        const montoBOBNecesario = parseFloat((montoNum * tasaBOBaMoneda).toFixed(2));
-
-        // Consultar saldo BOB disponible
+ 
+        // ── 6b. No tiene saldo en moneda_salida → intentar desde BOB ──────────
         const [[saldoBOB]] = await connection.query(
             `SELECT sm.Saldo FROM saldo_moneda sm
              WHERE  sm.ID_Cuenta = ? AND sm.ID_Moneda = ?`,
             [tarjeta.cuenta_id, idBOB]
         );
         const saldoBOBActual = saldoBOB ? parseFloat(saldoBOB.Saldo) : 0;
-
-        if (saldoBOBActual < montoBOBNecesario) {
+ 
+        // BOB necesarios para cubrir el retiro en moneda_salida
+        const bobNecesarios = parseFloat((montoEnSalida * tasaSalidaBOB).toFixed(2));
+ 
+        if (saldoBOBActual < bobNecesarios) {
             return res.status(400).json({
-                error: `Saldo insuficiente. Necesita ${montoBOBNecesario} BOB para retirar ${montoNum} ${monedaUpper}. Saldo BOB disponible: ${saldoBOBActual} BOB.`,
-                requiere_conversion: true,
-                detalle_conversion: {
-                    montoSolicitado:    `${montoNum} ${monedaUpper}`,
-                    montoBOBNecesario:  `${montoBOBNecesario} BOB`,
-                    saldoBOBDisponible: `${saldoBOBActual} BOB`,
-                    tasa: { valor: tasaBOBaMoneda, tipo: tipo_tasa },
+                error: `Saldo insuficiente en ${monedaSalidaUpper} y en BOB. Necesita ${bobNecesarios} BOB. Disponible: ${saldoBOBActual} BOB.`,
+                saldo_disponible: {
+                    [monedaSalidaUpper]: saldoSalidaNum,
+                    BOB: saldoBOBActual,
                 },
             });
         }
-
-        // ── Informar al usuario antes de convertir ────────────────────────────
+ 
         if (!confirmar_conversion) {
             return res.status(202).json({
                 requiere_confirmacion: true,
-                mensaje: `No tiene saldo en ${monedaUpper}. Se convertirán ${montoBOBNecesario} BOB.`,
+                mensaje: `Sin saldo en ${monedaSalidaUpper}. Se convertirán ${bobNecesarios} BOB.`,
                 detalle_conversion: {
                     montoSolicitado:    `${montoNum} ${monedaUpper}`,
-                    montoBOBNecesario:  `${montoBOBNecesario} BOB`,
+                    montoASalida:       `${montoEnSalida} ${monedaSalidaUpper}`,
+                    bobNecesarios:      `${bobNecesarios} BOB`,
                     saldoBOBDisponible: `${saldoBOBActual} BOB`,
-                    tasa: { valor: tasaBOBaMoneda, tipo: tipo_tasa },
+                    tasa: { valor: tasaSalidaBOB, tipo: tipo_tasa },
                 },
                 instruccion: "Reenvíe con confirmar_conversion: true para ejecutar.",
             });
         }
-
-        // ── Conversión confirmada ─────────────────────────────────────────────
+ 
+        // ── Conversión confirmada desde BOB ───────────────────────────────────
         await connection.query("SET @transaccion_id = 0;");
         await connection.query("SET @mensaje = '';");
         await connection.query(
             "CALL sp_realizar_retiro_conversion(?, ?, ?, ?, ?, ?, @transaccion_id, @mensaje)",
-            [tarjeta.pin_hash, montoNum, idMoneda, metodo, tasaBOBaMoneda, tipo_tasa]
+            [tarjeta.pin_hash, montoEnSalida, idMonedaSalida, metodo, tasaSalidaBOB, tipo_tasa]
         );
         const [[outputConv]] = await connection.query(
             "SELECT @transaccion_id AS transaccion_id, @mensaje AS mensaje"
@@ -176,12 +239,13 @@ export const realizarRetiro = async (req, res) => {
             mensaje: outputConv.mensaje,
             conversion: true,
             detalle: {
-                montoRetirado:      `${montoNum} ${monedaUpper}`,
-                montoBOBDescontado: `${montoBOBNecesario} BOB`,
-                tasa: { valor: tasaBOBaMoneda, tipo: tipo_tasa },
+                montoSolicitado:    `${montoNum} ${monedaUpper}`,
+                montoRetirado:      `${montoEnSalida} ${monedaSalidaUpper}`,
+                bobDescontados:     `${bobNecesarios} BOB`,
+                tasa: { valor: tasaSalidaBOB, tipo: tipo_tasa },
             },
         });
-
+ 
     } catch (err) {
         console.error("Error al realizar retiro:", err);
         return res.status(500).json({ error: "Error interno al realizar retiro." });
@@ -228,6 +292,9 @@ export const realizarDeposito = async (req, res) => {
         return res.status(400).json({ error: "El monto debe ser un número mayor a 0." });
     }
 
+    // ── ¿Es depósito en la misma moneda? (sin conversión) ────────────────────
+    const esDepositoDirecto = monedaOrigenUpper === monedaDestinoUpper;
+
     const connection = await connect();
 
     try {
@@ -260,15 +327,19 @@ export const realizarDeposito = async (req, res) => {
         if (!idMonedaDestino) return res.status(400).json({ error: `Moneda destino no encontrada: ${monedaDestinoUpper}.` });
 
         // ── 3. Calcular montos y tasas ────────────────────────────────────────
+        // Si es depósito directo (misma moneda), tasa = 1 y no se consulta la API
         let tasaOrigenABOB  = 1;
         let tasaDestinoABOB = 1;
 
-        if (monedaOrigenUpper  !== "BOB") tasaOrigenABOB  = await getTasaBOB(monedaOrigenUpper,  tipo_tasa);
-        if (monedaDestinoUpper !== "BOB") tasaDestinoABOB = await getTasaBOB(monedaDestinoUpper, tipo_tasa);
+        if (!esDepositoDirecto) {
+            // Solo se obtienen tasas cuando hay conversión real
+            if (monedaOrigenUpper  !== "BOB") tasaOrigenABOB  = await getTasaBOB(monedaOrigenUpper,  tipo_tasa);
+            if (monedaDestinoUpper !== "BOB") tasaDestinoABOB = await getTasaBOB(monedaDestinoUpper, tipo_tasa);
+        }
 
-        const montoBOB = parseFloat((montoNum * tasaOrigenABOB).toFixed(2));
-        const montoEnDestino = (monedaOrigenUpper === monedaDestinoUpper)
-            ? montoNum
+        const montoBOB       = parseFloat((montoNum * tasaOrigenABOB).toFixed(2));
+        const montoEnDestino = esDepositoDirecto
+            ? montoNum  // misma moneda: el monto acreditado es exactamente el recibido
             : parseFloat((montoBOB / tasaDestinoABOB).toFixed(6));
 
         // ── 4. Ejecutar SP ────────────────────────────────────────────────────
@@ -287,7 +358,7 @@ export const realizarDeposito = async (req, res) => {
                 metodo,
                 usuario.contrasena_hash,
                 usuario.pin_hash,
-                tasaOrigenABOB,
+                tasaOrigenABOB,   // tasa = 1 en depósito directo → SP no toca BOB espejo
                 tipo_tasa,
             ]
         );
@@ -297,22 +368,33 @@ export const realizarDeposito = async (req, res) => {
         if (output.transaccion_id === -1) {
             return res.status(400).json({ error: output.mensaje });
         }
-        return res.json({
+
+        // ── 5. Respuesta ──────────────────────────────────────────────────────
+        const respuesta = {
             transaccionId: output.transaccion_id,
             mensaje: output.mensaje,
             detalle: {
                 montoRecibido:   `${montoNum} ${monedaOrigenUpper}`,
                 montoAcreditado: `${montoEnDestino} ${monedaDestinoUpper}`,
-                equivalenteBOB:  `${montoBOB} BOB`,
-                tasa: {
-                    tipo:           tipo_tasa,
-                    origen_a_BOB:   tasaOrigenABOB,
-                    destino_a_BOB:  tasaDestinoABOB,
-                    moneda_origen:  monedaOrigenUpper,
-                    moneda_destino: monedaDestinoUpper,
-                },
             },
-        });
+        };
+
+        if (esDepositoDirecto) {
+            // Depósito sin conversión: no mostrar tasa ni equivalente BOB
+            respuesta.detalle.tipo = "deposito_directo";
+        } else {
+            // Depósito con conversión: mostrar tasa y equivalente BOB
+            respuesta.detalle.equivalenteBOB = `${montoBOB} BOB`;
+            respuesta.detalle.tasa = {
+                tipo:           tipo_tasa,
+                origen_a_BOB:   tasaOrigenABOB,
+                destino_a_BOB:  tasaDestinoABOB,
+                moneda_origen:  monedaOrigenUpper,
+                moneda_destino: monedaDestinoUpper,
+            };
+        }
+
+        return res.json(respuesta);
 
     } catch (err) {
         console.error("Error al realizar depósito:", err);
