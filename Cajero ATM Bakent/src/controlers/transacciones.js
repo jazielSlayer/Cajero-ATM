@@ -22,6 +22,156 @@ function limpiarMensaje(msg) {
         .replace(/(\d+\.\d*[1-9])0+\b/g, '$1');   // 9.420000   → 9.42
 }
 
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  realizarDeposito
+// ─────────────────────────────────────────────────────────────────────────────
+export const realizarDeposito = async (req, res) => {
+    const {
+        correo,
+        numero_tarjeta,
+        contrasena,
+        pin,
+        monto,
+        moneda_origen  = "BOB",
+        moneda_destino = "BOB",
+        tipo_tasa      = "oficial",
+        metodo         = "ATM",
+    } = req.body;
+
+    if (!correo || !numero_tarjeta || !contrasena || !pin || !monto) {
+        return res.status(400).json({
+            error: "Faltan campos: correo, numero_tarjeta, contrasena, pin, monto.",
+        });
+    }
+
+    const monedaOrigenUpper  = moneda_origen.toUpperCase();
+    const monedaDestinoUpper = moneda_destino.toUpperCase();
+
+    if (!MONEDAS_SOPORTADAS.has(monedaOrigenUpper)) {
+        return res.status(400).json({ error: `Moneda origen no soportada: ${moneda_origen}.` });
+    }
+    if (!MONEDAS_SOPORTADAS.has(monedaDestinoUpper)) {
+        return res.status(400).json({ error: `Moneda destino no soportada: ${moneda_destino}.` });
+    }
+    if (!["oficial", "binance"].includes(tipo_tasa)) {
+        return res.status(400).json({ error: "tipo_tasa debe ser 'oficial' o 'binance'." });
+    }
+
+    const montoNum = parseFloat(monto);
+    if (isNaN(montoNum) || montoNum <= 0) {
+        return res.status(400).json({ error: "El monto debe ser un número mayor a 0." });
+    }
+
+    // ── ¿Es depósito en la misma moneda? (sin conversión) ────────────────────
+    const esDepositoDirecto = monedaOrigenUpper === monedaDestinoUpper;
+
+    const connection = await connect();
+
+    try {
+        // ── 1. Autenticación ──────────────────────────────────────────────────
+        const [[usuario]] = await connection.query(
+            `SELECT u.Contrasena AS contrasena_hash, tar.Pin AS pin_hash, c.ID AS cuenta_id
+             FROM   Users u
+             INNER JOIN Cuenta  c   ON c.ID_Users   = u.ID
+             INNER JOIN Tarjeta tar ON tar.ID_Cuenta = c.ID
+             WHERE  u.Correo = ? AND tar.Numero_tarjeta = ?
+               AND  u.Estado = 'activo' AND tar.Estado = 'activa'`,
+            [correo, numero_tarjeta]
+        );
+        if (!usuario) {
+            return res.status(404).json({ error: "Usuario o tarjeta no encontrada." });
+        }
+        const [contrasenaOk, pinOk] = await Promise.all([
+            bcrypt.compare(String(contrasena), usuario.contrasena_hash),
+            bcrypt.compare(String(pin),        usuario.pin_hash),
+        ]);
+        if (!contrasenaOk) return res.status(401).json({ error: "Contraseña incorrecta." });
+        if (!pinOk)        return res.status(401).json({ error: "PIN incorrecto." });
+
+        // ── 2. IDs de moneda ──────────────────────────────────────────────────
+        const [idMonedaOrigen, idMonedaDestino] = await Promise.all([
+            getIdMoneda(connection, monedaOrigenUpper),
+            getIdMoneda(connection, monedaDestinoUpper),
+        ]);
+        if (!idMonedaOrigen)  return res.status(400).json({ error: `Moneda origen no encontrada: ${monedaOrigenUpper}.` });
+        if (!idMonedaDestino) return res.status(400).json({ error: `Moneda destino no encontrada: ${monedaDestinoUpper}.` });
+
+        // ── 3. Calcular montos y tasas ────────────────────────────────────────
+        // Si es depósito directo (misma moneda), tasa = 1 y no se consulta la API
+        let tasaOrigenABOB  = 1;
+        let tasaDestinoABOB = 1;
+
+        if (!esDepositoDirecto) {
+            // Solo se obtienen tasas cuando hay conversión real
+            if (monedaOrigenUpper  !== "BOB") tasaOrigenABOB  = await getTasaBOB(monedaOrigenUpper,  tipo_tasa);
+            if (monedaDestinoUpper !== "BOB") tasaDestinoABOB = await getTasaBOB(monedaDestinoUpper, tipo_tasa);
+        }
+
+        const montoBOB       = parseFloat((montoNum * tasaOrigenABOB).toFixed(2));
+        const montoEnDestino = esDepositoDirecto
+            ? montoNum  // misma moneda: el monto acreditado es exactamente el recibido
+            : parseFloat((montoBOB / tasaDestinoABOB).toFixed(6));
+
+        // ── 4. Ejecutar SP ────────────────────────────────────────────────────
+        await connection.query("SET @transaccion_id = 0;");
+        await connection.query("SET @mensaje = '';");
+        await connection.query(
+            `CALL sp_realizar_deposito_multimoneda(
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, @transaccion_id, @mensaje
+             )`,
+            [
+                correo,
+                montoNum,
+                idMonedaOrigen,
+                montoEnDestino,
+                idMonedaDestino,
+                metodo,
+                usuario.contrasena_hash,
+                usuario.pin_hash,
+                tasaOrigenABOB,   // tasa = 1 en depósito directo → SP no toca BOB espejo
+                tipo_tasa,
+            ]
+        );
+        const [[output]] = await connection.query(
+            "SELECT @transaccion_id AS transaccion_id, @mensaje AS mensaje"
+        );
+        if (output.transaccion_id === -1) {
+            return res.status(400).json({ error: limpiarMensaje(output.mensaje) });
+        }
+        const respuesta = {
+            transaccionId: output.transaccion_id,
+            mensaje: limpiarMensaje(output.mensaje),
+            detalle: {
+                montoRecibido:   `${montoNum} ${monedaOrigenUpper}`,
+                montoAcreditado: `${montoEnDestino} ${monedaDestinoUpper}`,
+            },
+        };
+
+        if (esDepositoDirecto) {
+            // Depósito sin conversión: no mostrar tasa ni equivalente BOB
+            respuesta.detalle.tipo = "deposito_directo";
+        } else {
+            // Depósito con conversión: mostrar tasa y equivalente BOB
+            respuesta.detalle.equivalenteBOB = `${montoBOB} BOB`;
+            respuesta.detalle.tasa = {
+                tipo:           tipo_tasa,
+                origen_a_BOB:   tasaOrigenABOB,
+                destino_a_BOB:  tasaDestinoABOB,
+                moneda_origen:  monedaOrigenUpper,
+                moneda_destino: monedaDestinoUpper,
+            };
+        }
+
+        return res.json(respuesta);
+
+    } catch (err) {
+        console.error("Error al realizar depósito:", err);
+        return res.status(500).json({ error: "Error interno al realizar depósito." });
+    }
+};
+
 export const realizarRetiro = async (req, res) => {
     const {
         numero_tarjeta,
@@ -258,155 +408,6 @@ export const realizarRetiro = async (req, res) => {
         return res.status(500).json({ error: "Error interno al realizar retiro." });
     }
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  realizarDeposito
-// ─────────────────────────────────────────────────────────────────────────────
-export const realizarDeposito = async (req, res) => {
-    const {
-        correo,
-        numero_tarjeta,
-        contrasena,
-        pin,
-        monto,
-        moneda_origen  = "BOB",
-        moneda_destino = "BOB",
-        tipo_tasa      = "oficial",
-        metodo         = "ATM",
-    } = req.body;
-
-    if (!correo || !numero_tarjeta || !contrasena || !pin || !monto) {
-        return res.status(400).json({
-            error: "Faltan campos: correo, numero_tarjeta, contrasena, pin, monto.",
-        });
-    }
-
-    const monedaOrigenUpper  = moneda_origen.toUpperCase();
-    const monedaDestinoUpper = moneda_destino.toUpperCase();
-
-    if (!MONEDAS_SOPORTADAS.has(monedaOrigenUpper)) {
-        return res.status(400).json({ error: `Moneda origen no soportada: ${moneda_origen}.` });
-    }
-    if (!MONEDAS_SOPORTADAS.has(monedaDestinoUpper)) {
-        return res.status(400).json({ error: `Moneda destino no soportada: ${moneda_destino}.` });
-    }
-    if (!["oficial", "binance"].includes(tipo_tasa)) {
-        return res.status(400).json({ error: "tipo_tasa debe ser 'oficial' o 'binance'." });
-    }
-
-    const montoNum = parseFloat(monto);
-    if (isNaN(montoNum) || montoNum <= 0) {
-        return res.status(400).json({ error: "El monto debe ser un número mayor a 0." });
-    }
-
-    // ── ¿Es depósito en la misma moneda? (sin conversión) ────────────────────
-    const esDepositoDirecto = monedaOrigenUpper === monedaDestinoUpper;
-
-    const connection = await connect();
-
-    try {
-        // ── 1. Autenticación ──────────────────────────────────────────────────
-        const [[usuario]] = await connection.query(
-            `SELECT u.Contrasena AS contrasena_hash, tar.Pin AS pin_hash, c.ID AS cuenta_id
-             FROM   Users u
-             INNER JOIN Cuenta  c   ON c.ID_Users   = u.ID
-             INNER JOIN Tarjeta tar ON tar.ID_Cuenta = c.ID
-             WHERE  u.Correo = ? AND tar.Numero_tarjeta = ?
-               AND  u.Estado = 'activo' AND tar.Estado = 'activa'`,
-            [correo, numero_tarjeta]
-        );
-        if (!usuario) {
-            return res.status(404).json({ error: "Usuario o tarjeta no encontrada." });
-        }
-        const [contrasenaOk, pinOk] = await Promise.all([
-            bcrypt.compare(String(contrasena), usuario.contrasena_hash),
-            bcrypt.compare(String(pin),        usuario.pin_hash),
-        ]);
-        if (!contrasenaOk) return res.status(401).json({ error: "Contraseña incorrecta." });
-        if (!pinOk)        return res.status(401).json({ error: "PIN incorrecto." });
-
-        // ── 2. IDs de moneda ──────────────────────────────────────────────────
-        const [idMonedaOrigen, idMonedaDestino] = await Promise.all([
-            getIdMoneda(connection, monedaOrigenUpper),
-            getIdMoneda(connection, monedaDestinoUpper),
-        ]);
-        if (!idMonedaOrigen)  return res.status(400).json({ error: `Moneda origen no encontrada: ${monedaOrigenUpper}.` });
-        if (!idMonedaDestino) return res.status(400).json({ error: `Moneda destino no encontrada: ${monedaDestinoUpper}.` });
-
-        // ── 3. Calcular montos y tasas ────────────────────────────────────────
-        // Si es depósito directo (misma moneda), tasa = 1 y no se consulta la API
-        let tasaOrigenABOB  = 1;
-        let tasaDestinoABOB = 1;
-
-        if (!esDepositoDirecto) {
-            // Solo se obtienen tasas cuando hay conversión real
-            if (monedaOrigenUpper  !== "BOB") tasaOrigenABOB  = await getTasaBOB(monedaOrigenUpper,  tipo_tasa);
-            if (monedaDestinoUpper !== "BOB") tasaDestinoABOB = await getTasaBOB(monedaDestinoUpper, tipo_tasa);
-        }
-
-        const montoBOB       = parseFloat((montoNum * tasaOrigenABOB).toFixed(2));
-        const montoEnDestino = esDepositoDirecto
-            ? montoNum  // misma moneda: el monto acreditado es exactamente el recibido
-            : parseFloat((montoBOB / tasaDestinoABOB).toFixed(6));
-
-        // ── 4. Ejecutar SP ────────────────────────────────────────────────────
-        await connection.query("SET @transaccion_id = 0;");
-        await connection.query("SET @mensaje = '';");
-        await connection.query(
-            `CALL sp_realizar_deposito_multimoneda(
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, @transaccion_id, @mensaje
-             )`,
-            [
-                correo,
-                montoNum,
-                idMonedaOrigen,
-                montoEnDestino,
-                idMonedaDestino,
-                metodo,
-                usuario.contrasena_hash,
-                usuario.pin_hash,
-                tasaOrigenABOB,   // tasa = 1 en depósito directo → SP no toca BOB espejo
-                tipo_tasa,
-            ]
-        );
-        const [[output]] = await connection.query(
-            "SELECT @transaccion_id AS transaccion_id, @mensaje AS mensaje"
-        );
-        if (output.transaccion_id === -1) {
-            return res.status(400).json({ error: limpiarMensaje(output.mensaje) });
-        }
-        const respuesta = {
-            transaccionId: output.transaccion_id,
-            mensaje: limpiarMensaje(output.mensaje),
-            detalle: {
-                montoRecibido:   `${montoNum} ${monedaOrigenUpper}`,
-                montoAcreditado: `${montoEnDestino} ${monedaDestinoUpper}`,
-            },
-        };
-
-        if (esDepositoDirecto) {
-            // Depósito sin conversión: no mostrar tasa ni equivalente BOB
-            respuesta.detalle.tipo = "deposito_directo";
-        } else {
-            // Depósito con conversión: mostrar tasa y equivalente BOB
-            respuesta.detalle.equivalenteBOB = `${montoBOB} BOB`;
-            respuesta.detalle.tasa = {
-                tipo:           tipo_tasa,
-                origen_a_BOB:   tasaOrigenABOB,
-                destino_a_BOB:  tasaDestinoABOB,
-                moneda_origen:  monedaOrigenUpper,
-                moneda_destino: monedaDestinoUpper,
-            };
-        }
-
-        return res.json(respuesta);
-
-    } catch (err) {
-        console.error("Error al realizar depósito:", err);
-        return res.status(500).json({ error: "Error interno al realizar depósito." });
-    }
-};
-
 // ─────────────────────────────────────────────────────────────────────────────
 //  realizarTransferencia
 // ─────────────────────────────────────────────────────────────────────────────
