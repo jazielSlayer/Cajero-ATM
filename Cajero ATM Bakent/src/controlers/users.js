@@ -93,6 +93,87 @@ function generarFechaVencimiento() {
     return fecha.toISOString().split('T')[0]; // YYYY-MM-DD
 }
 
+export const consultarSaldosUsuario = async (req, res) => {
+    // El nombre completo viene como parámetro de ruta, puede tener espacios (URL-encoded)
+    const nombre_completo = decodeURIComponent(req.params.nombre_completo ?? "").trim();
+ 
+    if (!nombre_completo) {
+        return res.status(400).json({ error: "El parámetro nombre_completo es requerido." });
+    }
+ 
+    const connection = await connect();
+ 
+    try {
+        // ── 1. Buscar usuario y cuenta por nombre completo ────────────────────
+        const [[usuario]] = await connection.query(
+            `SELECT
+                vuc.usuario_id,
+                vuc.nombre_completo,
+                vuc.Correo         AS correo,
+                vuc.estado_usuario,
+                c.ID               AS cuenta_id,
+                c.Numero_cuenta    AS numero_cuenta,
+                c.Tipo_cuenta      AS tipo_cuenta,
+                c.Estado           AS estado_cuenta
+             FROM vista_usuarios_completo vuc
+             INNER JOIN Cuenta c ON c.ID_Users = vuc.usuario_id
+             WHERE vuc.nombre_completo = ?
+               AND vuc.estado_usuario  = 'activo'
+               AND c.Estado            = 'activa'
+             LIMIT 1`,
+            [nombre_completo]
+        );
+ 
+        if (!usuario) {
+            return res.status(404).json({
+                error: `No se encontró un usuario activo con nombre: "${nombre_completo}".`,
+            });
+        }
+ 
+        // ── 2. Obtener todos los saldos del usuario (una fila por moneda) ─────
+        const [saldos] = await connection.query(
+            `SELECT
+                m.Codigo              AS moneda,
+                m.Nombre              AS nombre_moneda,
+                m.Simbolo             AS simbolo,
+                sm.Saldo              AS saldo,
+                sm.Fecha_modificacion AS ultima_actualizacion
+             FROM saldo_moneda sm
+             INNER JOIN moneda m ON sm.ID_Moneda = m.ID
+             WHERE sm.ID_Cuenta = ?
+             ORDER BY sm.Saldo DESC`,
+            [usuario.cuenta_id]
+        );
+ 
+        // ── 3. Saldo total expresado en BOB (solo el registro BOB directo) ────
+        const saldoBOB = saldos.find((s) => s.moneda === "BOB");
+        const saldo_total_bob = saldoBOB ? parseFloat(saldoBOB.saldo) : 0;
+ 
+        // ── 4. Respuesta ──────────────────────────────────────────────────────
+        return res.json({
+            usuario: {
+                nombre_completo: usuario.nombre_completo,
+                correo:          usuario.correo,
+                numero_cuenta:   usuario.numero_cuenta,
+                tipo_cuenta:     usuario.tipo_cuenta,
+            },
+            saldos: saldos.map((s) => ({
+                moneda:               s.moneda,
+                nombre_moneda:        s.nombre_moneda,
+                simbolo:              s.simbolo,
+                saldo:                parseFloat(s.saldo),
+                ultima_actualizacion: s.ultima_actualizacion,
+            })),
+            saldo_total_bob,
+        });
+ 
+    } catch (err) {
+        console.error("Error al consultar saldos:", err);
+        return res.status(500).json({ error: "Error interno al consultar saldos." });
+    }
+};
+ 
+
 export const createUser = async (req, res) => {
     const connection = await connect();
 

@@ -1,5 +1,5 @@
 import { Router } from "express"; 
-import { DatosUsuario, getUsuariosCompleto, createUser } from "../controlers/users";
+import { DatosUsuario, getUsuariosCompleto, createUser, consultarSaldosUsuario } from "../controlers/users";
 
 const router = Router();
 
@@ -10,5 +10,7 @@ router.get("/usuarios/completo", getUsuariosCompleto);
 router.post("/crear/usuario", createUser);
 
 router.post("/usuario/datos", DatosUsuario)
+
+router.get("/usuario/saldo/:nombre_completo", consultarSaldosUsuario)
 
 export default router;

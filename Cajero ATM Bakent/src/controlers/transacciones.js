@@ -15,6 +15,13 @@ async function getIdMoneda(connection, codigo) {
     return row ? row.ID : null;
 }
 
+function limpiarMensaje(msg) {
+    if (!msg) return msg;
+    return msg
+        .replace(/(\d+)\.0+\b/g, '$1')            // 500.000000 → 500
+        .replace(/(\d+\.\d*[1-9])0+\b/g, '$1');   // 9.420000   → 9.42
+}
+
 export const realizarRetiro = async (req, res) => {
     const {
         numero_tarjeta,
@@ -105,7 +112,7 @@ export const realizarRetiro = async (req, res) => {
                         const tasaOrigenBOB  = monedaUpper  === "BOB" ? 1 : await getTasaBOB(monedaUpper,  tipo_tasa);
                         const tasaDestinoBOB = s.Codigo     === "BOB" ? 1 : await getTasaBOB(s.Codigo,     tipo_tasa);
                         const montoBOB = montoNum * tasaOrigenBOB;
-                        montoEnEstaMoneda = parseFloat((montoBOB / tasaDestinoBoB).toFixed(6));
+                        montoEnEstaMoneda = parseFloat((montoBOB / tasaDestinoBOB).toFixed(6));
                         tasa = tasaOrigenBOB;
                     }
  
@@ -170,11 +177,11 @@ export const realizarRetiro = async (req, res) => {
                 "SELECT @transaccion_id AS transaccion_id, @mensaje AS mensaje"
             );
             if (output.transaccion_id === -1) {
-                return res.status(400).json({ error: output.mensaje });
+                return res.status(400).json({ error: limpiarMensaje(output.mensaje) });
             }
             return res.json({
                 transaccionId: output.transaccion_id,
-                mensaje: output.mensaje,
+                mensaje: limpiarMensaje(output.mensaje),
                 conversion: monedaUpper !== monedaSalidaUpper,
                 detalle: {
                     montoSolicitado: `${montoNum} ${monedaUpper}`,
@@ -232,11 +239,11 @@ export const realizarRetiro = async (req, res) => {
             "SELECT @transaccion_id AS transaccion_id, @mensaje AS mensaje"
         );
         if (outputConv.transaccion_id === -1) {
-            return res.status(400).json({ error: outputConv.mensaje });
+            return res.status(400).json({ error: limpiarMensaje(outputConv.mensaje) });
         }
         return res.json({
             transaccionId: outputConv.transaccion_id,
-            mensaje: outputConv.mensaje,
+            mensaje: limpiarMensaje(outputConv.mensaje),
             conversion: true,
             detalle: {
                 montoSolicitado:    `${montoNum} ${monedaUpper}`,
@@ -366,13 +373,11 @@ export const realizarDeposito = async (req, res) => {
             "SELECT @transaccion_id AS transaccion_id, @mensaje AS mensaje"
         );
         if (output.transaccion_id === -1) {
-            return res.status(400).json({ error: output.mensaje });
+            return res.status(400).json({ error: limpiarMensaje(output.mensaje) });
         }
-
-        // ── 5. Respuesta ──────────────────────────────────────────────────────
         const respuesta = {
             transaccionId: output.transaccion_id,
-            mensaje: output.mensaje,
+            mensaje: limpiarMensaje(output.mensaje),
             detalle: {
                 montoRecibido:   `${montoNum} ${monedaOrigenUpper}`,
                 montoAcreditado: `${montoEnDestino} ${monedaDestinoUpper}`,
@@ -603,12 +608,11 @@ async function _ejecutarTransferencia(connection, res, params) {
     );
 
     if (output.transaccion_id === -1) {
-        return res.status(400).json({ error: output.mensaje });
-    }
-
-    return res.json({
-        transaccionId: output.transaccion_id,
-        mensaje: output.mensaje,
+            return res.status(400).json({ error: limpiarMensaje(output.mensaje) });
+        }
+        return res.json({
+            transaccionId: output.transaccion_id,
+            mensaje: limpiarMensaje(output.mensaje),
         detalle: {
             montoDebitado:   `${montoOrigen} ${monedaOrigenLabel}`,
             montoAcreditado: `${montoDestino} ${monedaDestinoLabel}`,

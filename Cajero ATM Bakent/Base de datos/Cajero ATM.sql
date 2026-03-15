@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 15-03-2026 a las 17:00:44
+-- Tiempo de generación: 15-03-2026 a las 18:17:05
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.1.25
 
@@ -1119,9 +1119,10 @@ INSERT INTO `saldo_moneda` (`ID`, `ID_Cuenta`, `ID_Moneda`, `Saldo`, `Fecha_crea
 (2, 6, 1, 499.000000, '2026-03-14 18:22:57', '2026-03-15 10:08:29'),
 (3, 7, 1, 0.000000, '2026-03-14 18:22:57', '2026-03-14 21:05:09'),
 (4, 8, 1, 0.000000, '2026-03-14 18:22:57', '2026-03-14 21:05:09'),
-(10, 9, 1, 7294.000000, '2026-03-14 20:49:17', '2026-03-15 10:09:13'),
-(11, 9, 2, 1053.446372, '2026-03-14 23:00:43', '2026-03-15 10:07:41'),
-(12, 6, 2, 13.000000, '2026-03-15 09:43:29', '2026-03-15 09:43:29');
+(10, 9, 1, 7384.410400, '2026-03-14 20:49:17', '2026-03-15 13:13:44'),
+(11, 9, 2, 1562.446372, '2026-03-14 23:00:43', '2026-03-15 13:11:21'),
+(12, 6, 2, 13.000000, '2026-03-15 09:43:29', '2026-03-15 09:43:29'),
+(13, 9, 3, 13.790747, '2026-03-15 12:27:36', '2026-03-15 12:27:36');
 
 -- --------------------------------------------------------
 
@@ -1211,10 +1212,10 @@ CREATE TABLE `tasa_cambio_cache` (
 --
 
 INSERT INTO `tasa_cambio_cache` (`ID`, `Moneda_origen`, `Moneda_destino`, `Tasa`, `Tipo_tasa`, `Fecha_actualizacion`) VALUES
-(1, 'BOB', 'USD', 0.14367816, 'oficial', '2026-03-15 10:07:41'),
-(2, 'USD', 'BOB', 6.96000000, 'oficial', '2026-03-15 10:07:41'),
-(3, 'BOB', 'USD', 0.10615711, 'binance', '2026-03-15 10:07:41'),
-(4, 'USD', 'BOB', 9.42000000, 'binance', '2026-03-15 10:07:41');
+(1, 'BOB', 'USD', 0.14367816, 'oficial', '2026-03-15 13:11:21'),
+(2, 'USD', 'BOB', 6.96000000, 'oficial', '2026-03-15 13:11:21'),
+(3, 'BOB', 'USD', 0.10615711, 'binance', '2026-03-15 13:11:21'),
+(4, 'USD', 'BOB', 9.42000000, 'binance', '2026-03-15 13:11:21');
 
 -- --------------------------------------------------------
 
@@ -1284,7 +1285,12 @@ INSERT INTO `transacciones` (`ID`, `ID_Cuenta_Transfiere`, `ID_Cuenta_Transferid
 (29, 9, NULL, 2, 500.00, 1000.37, 1053.45, 'ATM', 'exitosa', 'Depósito 500.000000 BOB → 53.078556 USD | Tasa binance: 1.00000000', '2026-03-15 10:07:41', '2026-03-15 10:07:41', '2026-03-15 10:07:41'),
 (30, 9, NULL, 2, 942.00, 5210.00, 6152.00, 'ATM', 'exitosa', 'Depósito 100.000000 USD → 942.000000 BOB | Tasa binance: 9.42000000', '2026-03-15 10:08:09', '2026-03-15 10:08:09', '2026-03-15 10:08:09'),
 (31, 6, 9, 3, 200.00, 699.00, 499.00, 'ATM', 'exitosa', 'Pago de deuda | 200.000000 BOB → 200.000000 BOB | Tasa oficial', '2026-03-15 10:08:29', '2026-03-15 10:08:29', '2026-03-15 10:08:29'),
-(32, 9, NULL, 2, 942.00, 6352.00, 7294.00, 'ATM', 'exitosa', 'Depósito 100.000000 USD → 942.000000 BOB | Tasa binance: 9.42000000', '2026-03-15 10:09:13', '2026-03-15 10:09:13', '2026-03-15 10:09:13');
+(32, 9, NULL, 2, 942.00, 6352.00, 7294.00, 'ATM', 'exitosa', 'Depósito 100.000000 USD → 942.000000 BOB | Tasa binance: 9.42000000', '2026-03-15 10:09:13', '2026-03-15 10:09:13', '2026-03-15 10:09:13'),
+(33, 9, NULL, 2, 10.00, 1053.45, 1063.45, 'ATM', 'exitosa', 'Depósito directo 10.000000 USD', '2026-03-15 12:11:51', '2026-03-15 12:11:51', '2026-03-15 12:11:51'),
+(34, 9, NULL, 2, 104.33, 0.00, 13.79, 'ATM', 'exitosa', 'Depósito 14.990000 USD → 13.790747 EUR | Tasa oficial: 6.96000000', '2026-03-15 12:27:36', '2026-03-15 12:27:36', '2026-03-15 12:27:36'),
+(35, 9, NULL, 2, 500.00, 1063.45, 1563.45, 'ATM', 'exitosa', 'Depósito directo 500.000000 USD', '2026-03-15 12:49:56', '2026-03-15 12:49:56', '2026-03-15 12:49:56'),
+(36, 9, NULL, 1, 6.96, 7398.33, 7391.37, 'ATM', 'exitosa', 'Retiro directo en USD | Tasa oficial: 6.96000000', '2026-03-15 13:11:21', '2026-03-15 13:11:21', '2026-03-15 13:11:21'),
+(37, 9, NULL, 1, 6.96, 7391.37, 7384.41, 'ATM', 'exitosa', 'Retiro directo en BOB | Tasa oficial: 1.00000000', '2026-03-15 13:13:44', '2026-03-15 13:13:44', '2026-03-15 13:13:44');
 
 -- --------------------------------------------------------
 
@@ -1604,7 +1610,7 @@ ALTER TABLE `rol`
 -- AUTO_INCREMENT de la tabla `saldo_moneda`
 --
 ALTER TABLE `saldo_moneda`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT de la tabla `sesion_atm`
@@ -1628,7 +1634,7 @@ ALTER TABLE `tasa_cambio`
 -- AUTO_INCREMENT de la tabla `tasa_cambio_cache`
 --
 ALTER TABLE `tasa_cambio_cache`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=54;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=78;
 
 --
 -- AUTO_INCREMENT de la tabla `tipo_transaccion`
@@ -1640,7 +1646,7 @@ ALTER TABLE `tipo_transaccion`
 -- AUTO_INCREMENT de la tabla `transacciones`
 --
 ALTER TABLE `transacciones`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=33;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=38;
 
 --
 -- AUTO_INCREMENT de la tabla `users`

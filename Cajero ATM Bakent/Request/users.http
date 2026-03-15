@@ -26,3 +26,6 @@ Content-Type: application/json
     "tipo_tarjeta": "credito",
     "tipo_cuenta": "ahorro"
 }
+
+###
+GET {{api}}/usuario/saldo/Jaziel%20Armando%20Vargas%20Choque

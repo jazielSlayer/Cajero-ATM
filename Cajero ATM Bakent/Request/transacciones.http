@@ -22,11 +22,12 @@ Content-Type: application/json
 {
   "numero_tarjeta": "4520899596991226",
   "pin": "5241",
-  "monto": 1,
-  "moneda": "USD",
+  "monto": 500,
+  "moneda": "BOB",
   "tipo_tasa": "oficial",
   "metodo": "ATM",
-  "confirmar_conversion": true
+  "confirmar_conversion": true,
+  "moneda_salida": "BOB"
 }
 
 ### ─── DEPÓSITO ──────────────────────────────────────────────
@@ -40,7 +41,7 @@ Content-Type: application/json
   "pin": "5241",
   "monto": 500,
   "moneda_origen": "BOB",
-  "moneda_destino": "USD",
+  "moneda_destino": "BOB",
   "tipo_tasa": "binance",
   "metodo": "ATM"
 }
