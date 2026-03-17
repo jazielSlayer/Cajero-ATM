@@ -6,7 +6,7 @@ export const cambiarEstadoTarjeta = async (req, res) => {
     const { numero_tarjeta, pin, nombre_completo, nuevo_estado } = req.body;
 
     try {
-        // Buscar el hash del PIN por número de tarjeta (identificador único)
+        
         const [[tarjeta]] = await connection.query(
             `SELECT tar.Pin AS pin_hash
              FROM Tarjeta tar
@@ -18,7 +18,7 @@ export const cambiarEstadoTarjeta = async (req, res) => {
             return res.status(404).json({ error: 'Tarjeta no encontrada.' });
         }
 
-        // Verificar PIN con bcrypt antes de llamar al SP
+        
         const pinOk = await bcrypt.compare(pin, tarjeta.pin_hash);
         if (!pinOk) {
             return res.status(401).json({ error: 'PIN incorrecto.' });

@@ -7,6 +7,9 @@
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.1.25
 
+CREATE DATABASE cajero_atm;
+USE cajero_atm;
+
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
@@ -1409,8 +1412,7 @@ CREATE TABLE `vista_cuentas_resumen` (
 -- Estructura Stand-in para la vista `vista_estadisticas_sistema`
 -- (Véase abajo para la vista actual)
 --
-CREATE TABLE `vista_estadisticas_sistema` (
-);
+
 
 -- --------------------------------------------------------
 
@@ -1491,10 +1493,6 @@ CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW 
 
 --
 -- Estructura para la vista `vista_estadisticas_sistema`
---
-DROP TABLE IF EXISTS `vista_estadisticas_sistema`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `vista_estadisticas_sistema`  AS SELECT (select count(0) from `users` where `users`.`Estado` = 'activo') AS `usuarios_activos`, (select count(0) from `cuenta` where `cuenta`.`Estado` = 'activa') AS `cuentas_activas`, (select sum(`cuenta`.`Saldo`) from `cuenta` where `cuenta`.`Estado` = 'activa') AS `saldo_total_sistema`, (select count(0) from `transacciones` where cast(`transacciones`.`Fecha_transaccion` as date) = curdate()) AS `transacciones_hoy`, (select sum(`transacciones`.`Monto`) from `transacciones` where cast(`transacciones`.`Fecha_transaccion` as date) = curdate() and `transacciones`.`Estado` = 'exitosa') AS `monto_movido_hoy`, (select count(0) from `tarjeta` where `tarjeta`.`Estado` = 'bloqueada') AS `tarjetas_bloqueadas`, (select count(0) from `sesion_atm` where `sesion_atm`.`Estado` = 'activa') AS `sesiones_en_curso` ;
 
 -- --------------------------------------------------------
 

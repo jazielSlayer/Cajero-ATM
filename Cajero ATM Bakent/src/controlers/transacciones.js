@@ -6,7 +6,6 @@ const MONEDAS_SOPORTADAS = new Set([
     "BOB", "USD", "EUR", "BRL", "ARS", "CLP", "PEN", "COP",
 ]);
 
-// ─── Helper: obtiene el ID_Moneda desde la tabla moneda por código ────────────
 async function getIdMoneda(connection, codigo) {
     const [[row]] = await connection.query(
         "SELECT ID FROM moneda WHERE Codigo = ? AND Activa = 1 LIMIT 1",
@@ -18,15 +17,13 @@ async function getIdMoneda(connection, codigo) {
 function limpiarMensaje(msg) {
     if (!msg) return msg;
     return msg
-        .replace(/(\d+)\.0+\b/g, '$1')            // 500.000000 → 500
-        .replace(/(\d+\.\d*[1-9])0+\b/g, '$1');   // 9.420000   → 9.42
+        .replace(/(\d+)\.0+\b/g, '$1')            
+        .replace(/(\d+\.\d*[1-9])0+\b/g, '$1');   
 }
 
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  realizarDeposito
-// ─────────────────────────────────────────────────────────────────────────────
+
 export const realizarDeposito = async (req, res) => {
     const {
         correo,
@@ -408,9 +405,7 @@ export const realizarRetiro = async (req, res) => {
         return res.status(500).json({ error: "Error interno al realizar retiro." });
     }
 };
-// ─────────────────────────────────────────────────────────────────────────────
-//  realizarTransferencia
-// ─────────────────────────────────────────────────────────────────────────────
+
 export const realizarTransferencia = async (req, res) => {
     const {
         numero_de_cuenta,
@@ -572,7 +567,6 @@ export const realizarTransferencia = async (req, res) => {
     }
 };
 
-// ─── Helper: ejecuta el SP de transferencia multimoneda ──────────────────────
 async function _ejecutarTransferencia(connection, res, params) {
     const {
         numero_de_cuenta, numero_cuenta_destino,
@@ -627,9 +621,6 @@ async function _ejecutarTransferencia(connection, res, params) {
     });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  consultarSaldos — FIX: SP corregido para usar JOIN con tabla moneda
-// ─────────────────────────────────────────────────────────────────────────────
 export const consultarSaldos = async (req, res) => {
     const { numero_cuenta } = req.params;
 
@@ -664,9 +655,7 @@ export const consultarSaldos = async (req, res) => {
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  consultarTasas
-// ─────────────────────────────────────────────────────────────────────────────
+
 export const consultarTasas = async (req, res) => {
     try {
         const connection = await connect();
@@ -682,9 +671,7 @@ export const consultarTasas = async (req, res) => {
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  getTransaccionesUsuario
-// ─────────────────────────────────────────────────────────────────────────────
+
 export const getTransaccionesUsuario = async (req, res) => {
     const connection = await connect();
     const { nombre_completo, tipo_transaccion } = req.body;

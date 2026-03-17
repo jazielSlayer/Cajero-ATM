@@ -65,20 +65,16 @@ export const getUsuariosCompleto = async (req, res) => {
 
 
 
-// Genera un PIN de 4 dígitos aleatorio
-// Genera PIN de 4 dígitos
 function generarPin() {
     return Math.floor(1000 + Math.random() * 9000).toString();
 }
 
-// Genera número de cuenta de 16 dígitos único
 function generarNumeroCuenta() {
     const timestamp = Date.now().toString().slice(-8);
     const random    = Math.floor(10000000 + Math.random() * 90000000).toString();
     return timestamp + random; // 16 dígitos
 }
 
-// Genera número de tarjeta de 16 dígitos con prefijo 4 (estilo Visa)
 function generarNumeroTarjeta() {
     const prefijo  = "4";                // prefijo tipo Visa
     const timestamp = Date.now().toString().slice(-7);
@@ -86,7 +82,6 @@ function generarNumeroTarjeta() {
     return (prefijo + timestamp + random).slice(0, 16); // exactamente 16 dígitos
 }
 
-// Fecha de vencimiento: 5 años desde hoy
 function generarFechaVencimiento() {
     const fecha = new Date();
     fecha.setFullYear(fecha.getFullYear() + 5);
