@@ -16,7 +16,7 @@ POST {{api}}/crear/usuario
 Content-Type: application/json
 
 {
-     "nombre": "Jaziel Armando",
+    "nombre": "Jaziel Armando",
     "apellido": "Vargas Choque",
     "direccion": "Calle 21 de Enero 456",
     "telefono": "76543210",

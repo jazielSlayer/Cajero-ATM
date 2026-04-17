@@ -1,16 +1,21 @@
-import { Router } from "express"; 
-import { DatosUsuario, getUsuariosCompleto, createUser, consultarSaldosUsuario } from "../controlers/users";
+import { Router } from "express";
+import {
+    DatosUsuario,
+    getUsuariosCompleto,
+    createUser,
+    consultarSaldosUsuario,
+    solicitarVerificacion,
+    confirmarCodigo,
+} from "../controlers/users.js";
 
 const router = Router();
 
-// listado de usuarios con información completa
-router.get("/usuarios/completo", getUsuariosCompleto);
+router.post("/usuario/solicitar-verificacion", solicitarVerificacion);
+router.post("/usuario/confirmar-codigo",       confirmarCodigo);
 
-// crear nuevo usuario mediante procedimiento almacenado
-router.post("/crear/usuario", createUser);
-
-router.post("/usuario/datos", DatosUsuario)
-
-router.get("/usuario/saldo/:nombre_completo", consultarSaldosUsuario)
+router.get("/usuarios/completo",               getUsuariosCompleto);
+router.post("/crear/usuario",                  createUser);
+router.post("/usuario/datos",                  DatosUsuario);
+router.get("/usuario/saldo/:nombre_completo",  consultarSaldosUsuario);
 
 export default router;

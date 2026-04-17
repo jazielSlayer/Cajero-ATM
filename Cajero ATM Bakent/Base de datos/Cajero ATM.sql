@@ -3,12 +3,9 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 15-03-2026 a las 18:53:58
+-- Tiempo de generación: 17-04-2026 a las 21:24:08
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.1.25
-
-CREATE DATABASE cajero_atm;
-USE cajero_atm;
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -28,7 +25,7 @@ DELIMITER $$
 --
 -- Procedimientos
 --
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_buscar_usuario_login` (IN `p_numero_tarjeta` VARCHAR(16))   BEGIN
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_buscar_usuario_login` (IN `p_numero_tarjeta` VARCHAR(16) COLLATE utf8mb4_unicode_ci)   BEGIN
     SELECT
         u.Contrasena        AS contrasena_hash,
         tar.Pin             AS pin_hash,
@@ -46,7 +43,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_buscar_usuario_login` (IN `p_num
     LIMIT 1;
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_cambiar_estado_tarjeta` (IN `p_pin` VARCHAR(255), IN `p_nombre_completo` VARCHAR(201), IN `p_nuevo_estado` ENUM('activa','bloqueada','cancelada'), OUT `p_mensaje` VARCHAR(255))   BEGIN
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_cambiar_estado_tarjeta` (IN `p_pin` VARCHAR(255) COLLATE utf8mb4_unicode_ci, IN `p_nombre_completo` VARCHAR(201), IN `p_nuevo_estado` ENUM('activa','bloqueada','cancelada'), OUT `p_mensaje` VARCHAR(255))   BEGIN
     DECLARE v_tarjeta_id INT;
     DECLARE v_usuario_id INT;
 
@@ -76,7 +73,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_cambiar_estado_tarjeta` (IN `p_p
     END IF;
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_datos_usuario_por_nombre` (IN `p_nombre_completo` VARCHAR(201))   BEGIN
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_datos_usuario_por_nombre` (IN `p_nombre_completo` VARCHAR(201) COLLATE utf8mb4_unicode_ci)   BEGIN
     -- Datos del usuario con cuenta, tarjeta y Pin (hash bcrypt)
     SELECT
         vuc.usuario_id,
@@ -121,7 +118,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_datos_usuario_por_nombre` (IN `p
     ORDER BY vtc.Fecha_transaccion DESC;
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito` (IN `p_correo` VARCHAR(150), IN `p_monto` DECIMAL(20,6), IN `p_id_moneda` INT, IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_contrasena` VARCHAR(255), IN `p_pin` VARCHAR(255), IN `p_tasa` DECIMAL(20,8), IN `p_tipo_tasa` ENUM('oficial','binance','manual'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito` (IN `p_correo` VARCHAR(150) COLLATE utf8mb4_unicode_ci, IN `p_monto` DECIMAL(20,6), IN `p_id_moneda` INT, IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_contrasena` VARCHAR(255), IN `p_pin` VARCHAR(255), IN `p_tasa` DECIMAL(20,8), IN `p_tipo_tasa` ENUM('oficial','binance','manual'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
     DECLARE v_cuenta_id      INT;
     DECLARE v_saldo_bob      DECIMAL(20,6) DEFAULT 0;
     DECLARE v_estado_cuenta  VARCHAR(20);
@@ -259,7 +256,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito` (IN `p_correo
     END IF;
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito_multimoneda` (IN `p_correo` VARCHAR(150), IN `p_monto_origen` DECIMAL(20,6), IN `p_id_moneda_origen` INT, IN `p_monto_destino` DECIMAL(20,6), IN `p_id_moneda_destino` INT, IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_contrasena` VARCHAR(255), IN `p_pin` VARCHAR(255), IN `p_tasa` DECIMAL(20,8), IN `p_tipo_tasa` ENUM('oficial','binance','manual'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito_multimoneda` (IN `p_correo` VARCHAR(150) COLLATE utf8mb4_unicode_ci, IN `p_monto_origen` DECIMAL(20,6), IN `p_id_moneda_origen` INT, IN `p_monto_destino` DECIMAL(20,6), IN `p_id_moneda_destino` INT, IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_contrasena` VARCHAR(255), IN `p_pin` VARCHAR(255), IN `p_tasa` DECIMAL(20,8), IN `p_tipo_tasa` ENUM('oficial','binance','manual'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
     DECLARE v_cuenta_id      INT;
     DECLARE v_saldo_bob      DECIMAL(20,6) DEFAULT 0;
     DECLARE v_usuario_id     INT;
@@ -404,7 +401,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito_multimoneda` (
     END IF;
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro` (IN `p_pin` VARCHAR(255), IN `p_monto` DECIMAL(20,6), IN `p_id_moneda` INT, IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_tasa` DECIMAL(20,8), IN `p_tipo_tasa` ENUM('oficial','binance','manual'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro` (IN `p_pin` VARCHAR(255) COLLATE utf8mb4_unicode_ci, IN `p_monto` DECIMAL(20,6), IN `p_id_moneda` INT, IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_tasa` DECIMAL(20,8), IN `p_tipo_tasa` ENUM('oficial','binance','manual'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
     DECLARE v_cuenta_id      INT;
     DECLARE v_saldo_bob      DECIMAL(20,6) DEFAULT 0;
     DECLARE v_tipo_retiro    INT;
@@ -547,7 +544,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro` (IN `p_pin` VAR
     END IF;
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro_conversion` (IN `p_pin` VARCHAR(255), IN `p_monto` DECIMAL(20,6), IN `p_id_moneda` INT, IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_tasa_bob` DECIMAL(20,8), IN `p_tipo_tasa` ENUM('oficial','binance','manual'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro_conversion` (IN `p_pin` VARCHAR(255) COLLATE utf8mb4_unicode_ci, IN `p_monto` DECIMAL(20,6), IN `p_id_moneda` INT, IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_tasa_bob` DECIMAL(20,8), IN `p_tipo_tasa` ENUM('oficial','binance','manual'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
     DECLARE v_cuenta_id     INT;
     DECLARE v_saldo_bob     DECIMAL(20,6) DEFAULT 0;
     DECLARE v_tipo_retiro   INT;
@@ -618,7 +615,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro_conversion` (IN 
     END IF;
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia` (IN `p_numero_cuenta_origen` VARCHAR(20), IN `p_numero_cuenta_destino` VARCHAR(20), IN `p_monto` DECIMAL(15,2), IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_descripcion` VARCHAR(255), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia` (IN `p_numero_cuenta_origen` VARCHAR(20) COLLATE utf8mb4_unicode_ci, IN `p_numero_cuenta_destino` VARCHAR(20), IN `p_monto` DECIMAL(15,2), IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_descripcion` VARCHAR(255), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
     DECLARE v_cuenta_origen_id   INT;
     DECLARE v_cuenta_destino_id  INT;
     DECLARE v_saldo_origen       DECIMAL(20,6) DEFAULT 0;
@@ -697,7 +694,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia` (IN `p_n
     END IF;
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia_multimoneda` (IN `p_numero_cuenta_origen` VARCHAR(20), IN `p_numero_cuenta_destino` VARCHAR(20), IN `p_monto_origen` DECIMAL(20,6), IN `p_id_moneda_origen` INT, IN `p_monto_destino` DECIMAL(20,6), IN `p_id_moneda_destino` INT, IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_descripcion` VARCHAR(255), IN `p_tasa_origen_bob` DECIMAL(20,8), IN `p_tasa_destino_bob` DECIMAL(20,8), IN `p_tipo_tasa` ENUM('oficial','binance','manual'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia_multimoneda` (IN `p_numero_cuenta_origen` VARCHAR(20) COLLATE utf8mb4_unicode_ci, IN `p_numero_cuenta_destino` VARCHAR(20), IN `p_monto_origen` DECIMAL(20,6), IN `p_id_moneda_origen` INT, IN `p_monto_destino` DECIMAL(20,6), IN `p_id_moneda_destino` INT, IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_descripcion` VARCHAR(255), IN `p_tasa_origen_bob` DECIMAL(20,8), IN `p_tasa_destino_bob` DECIMAL(20,8), IN `p_tipo_tasa` ENUM('oficial','binance','manual'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
     DECLARE v_cuenta_origen_id     INT;
     DECLARE v_cuenta_destino_id    INT;
     DECLARE v_saldo_origen_bob     DECIMAL(20,6) DEFAULT 0;
@@ -883,53 +880,92 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia_multimone
     END IF;
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_registrar_usuario` (IN `p_nombre` VARCHAR(100), IN `p_apellido` VARCHAR(100), IN `p_direccion` VARCHAR(255), IN `p_telefono` VARCHAR(20), IN `p_edad` INT, IN `p_correo` VARCHAR(150), IN `p_contrasena` VARCHAR(255), IN `p_id_rol` INT, IN `p_numero_cuenta` VARCHAR(20), IN `p_tipo_cuenta` ENUM('ahorro','corriente'), IN `p_saldo_inicial` DECIMAL(15,2), IN `p_numero_tarjeta` VARCHAR(16), IN `p_pin` VARCHAR(255), IN `p_tipo_tarjeta` ENUM('debito','credito'), IN `p_fecha_vencimiento` DATE, OUT `p_usuario_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
-    DECLARE v_persona_id INT;
-    DECLARE v_cuenta_id  INT;
-    DECLARE v_id_bob     INT;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_registrar_usuario` (IN `p_nombre` VARCHAR(100) COLLATE utf8mb4_unicode_ci, IN `p_apellido` VARCHAR(100) COLLATE utf8mb4_unicode_ci, IN `p_direccion` VARCHAR(255) COLLATE utf8mb4_unicode_ci, IN `p_telefono` VARCHAR(20) COLLATE utf8mb4_unicode_ci, IN `p_edad` INT, IN `p_correo` VARCHAR(150) COLLATE utf8mb4_unicode_ci, IN `p_contrasena` VARCHAR(255) COLLATE utf8mb4_unicode_ci, IN `p_id_rol` INT, IN `p_numero_cuenta` VARCHAR(20) COLLATE utf8mb4_unicode_ci, IN `p_tipo_cuenta` ENUM('ahorro','corriente'), IN `p_saldo_inicial` DECIMAL(15,2), IN `p_numero_tarjeta` VARCHAR(16) COLLATE utf8mb4_unicode_ci, IN `p_pin` VARCHAR(255) COLLATE utf8mb4_unicode_ci, IN `p_tipo_tarjeta` ENUM('debito','credito'), IN `p_fecha_vencimiento` VARCHAR(20) COLLATE utf8mb4_unicode_ci, OUT `p_usuario_id` INT, OUT `p_mensaje` VARCHAR(255) COLLATE utf8mb4_unicode_ci)   BEGIN
+    DECLARE v_persona_id   INT;
+    DECLARE v_cuenta_id    INT;
+    DECLARE v_fecha_parsed DATE;
+    DECLARE v_id_bob       INT;
+    DECLARE v_error_msg    VARCHAR(500) DEFAULT '';
+    DECLARE v_error_code   INT          DEFAULT 0;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
+        GET DIAGNOSTICS CONDITION 1
+            v_error_code = MYSQL_ERRNO,
+            v_error_msg  = MESSAGE_TEXT;
         ROLLBACK;
         SET p_usuario_id = -1;
-        SET p_mensaje = 'Error: No se pudo registrar el usuario. Verifique los datos.';
+        SET p_mensaje = CONCAT('Error SQL #', v_error_code, ': ', v_error_msg);
     END;
 
-    IF EXISTS (SELECT 1 FROM Users WHERE Correo = p_correo) THEN
-        SET p_usuario_id = -1; SET p_mensaje = 'Error: El correo ya está registrado.';
+    -- Parsear fecha en múltiples formatos
+    SET v_fecha_parsed = COALESCE(
+        STR_TO_DATE(p_fecha_vencimiento, '%Y-%m-%d'),
+        STR_TO_DATE(p_fecha_vencimiento, '%d-%m-%Y'),
+        STR_TO_DATE(p_fecha_vencimiento, '%d/%m/%Y'),
+        STR_TO_DATE(p_fecha_vencimiento, '%m/%d/%Y'),
+        STR_TO_DATE(p_fecha_vencimiento, '%d/%m/%y'),
+        STR_TO_DATE(p_fecha_vencimiento, '%m/%d/%y'),
+        STR_TO_DATE(p_fecha_vencimiento, '%d-%m-%y')
+    );
+
+    -- Validaciones
+    IF v_fecha_parsed IS NULL THEN
+        SET p_usuario_id = -1;
+        SET p_mensaje = CONCAT('Error: Fecha inválida: [', p_fecha_vencimiento, ']');
+
+    ELSEIF v_fecha_parsed < CURDATE() THEN
+        SET p_usuario_id = -1;
+        SET p_mensaje = CONCAT('Error: La fecha de vencimiento ya expiró: ', v_fecha_parsed);
+
+    ELSEIF EXISTS (SELECT 1 FROM Users WHERE Correo = p_correo) THEN
+        SET p_usuario_id = -1;
+        SET p_mensaje = 'Error: El correo ya está registrado.';
+
     ELSEIF EXISTS (SELECT 1 FROM Cuenta WHERE Numero_cuenta = p_numero_cuenta) THEN
-        SET p_usuario_id = -1; SET p_mensaje = 'Error: El número de cuenta ya existe.';
+        SET p_usuario_id = -1;
+        SET p_mensaje = 'Error: El número de cuenta ya existe.';
+
     ELSEIF EXISTS (SELECT 1 FROM Tarjeta WHERE Numero_tarjeta = p_numero_tarjeta) THEN
-        SET p_usuario_id = -1; SET p_mensaje = 'Error: El número de tarjeta ya existe.';
+        SET p_usuario_id = -1;
+        SET p_mensaje = 'Error: El número de tarjeta ya existe.';
+
     ELSE
         SELECT ID INTO v_id_bob FROM moneda WHERE Codigo = 'BOB' LIMIT 1;
 
-        START TRANSACTION;
+        IF v_id_bob IS NULL THEN
+            SET p_usuario_id = -1;
+            SET p_mensaje = 'Error: No se encontró la moneda BOB.';
+        ELSE
+            START TRANSACTION;
 
-        INSERT INTO Persona (Nombre, Apellido, Direccion, Telefono, Edad)
-        VALUES (p_nombre, p_apellido, p_direccion, p_telefono, p_edad);
-        SET v_persona_id = LAST_INSERT_ID();
+            -- 1. Persona
+            INSERT INTO Persona (Nombre, Apellido, Direccion, Telefono, Edad)
+            VALUES (p_nombre, p_apellido, p_direccion, p_telefono, p_edad);
+            SET v_persona_id = LAST_INSERT_ID();
 
-        INSERT INTO Users (ID_Persona, ID_Rol, Correo, Contrasena)
-        VALUES (v_persona_id, p_id_rol, p_correo, p_contrasena);
-        SET p_usuario_id = LAST_INSERT_ID();
+            -- 2. Usuario
+            INSERT INTO Users (ID_Persona, ID_Rol, Correo, Contrasena)
+            VALUES (v_persona_id, p_id_rol, p_correo, p_contrasena);
+            SET p_usuario_id = LAST_INSERT_ID();
 
-        -- Cuenta sin columna Saldo
-        INSERT INTO Cuenta (Numero_cuenta, ID_Users, Tipo_cuenta)
-        VALUES (p_numero_cuenta, p_usuario_id, p_tipo_cuenta);
-        SET v_cuenta_id = LAST_INSERT_ID();
+            -- 3. Cuenta (sin columna Saldo)
+            INSERT INTO Cuenta (Numero_cuenta, ID_Users, Tipo_cuenta)
+            VALUES (p_numero_cuenta, p_usuario_id, p_tipo_cuenta);
+            SET v_cuenta_id = LAST_INSERT_ID();
 
-        -- Saldo inicial va en saldo_moneda
-        IF p_saldo_inicial > 0 THEN
+            -- 4. Tarjeta
+            INSERT INTO Tarjeta (ID_Users, ID_Cuenta, Numero_tarjeta, Pin, Tipo_tarjeta, Fecha_vencimiento)
+            VALUES (p_usuario_id, v_cuenta_id, p_numero_tarjeta, p_pin, p_tipo_tarjeta, v_fecha_parsed);
+
+            -- 5. Saldo inicial en BOB
             INSERT INTO saldo_moneda (ID_Cuenta, ID_Moneda, Saldo)
             VALUES (v_cuenta_id, v_id_bob, p_saldo_inicial);
+
+            COMMIT;
+            SET p_mensaje = CONCAT('Usuario registrado exitosamente. ID: ', p_usuario_id,
+                                   ' | Cuenta: ', p_numero_cuenta);
         END IF;
-
-        INSERT INTO Tarjeta (ID_Users, ID_Cuenta, Numero_tarjeta, Pin, Tipo_tarjeta, Fecha_vencimiento)
-        VALUES (p_usuario_id, v_cuenta_id, p_numero_tarjeta, p_pin, p_tipo_tarjeta, p_fecha_vencimiento);
-
-        COMMIT;
-        SET p_mensaje = 'Usuario registrado exitosamente.';
     END IF;
 END$$
 
@@ -947,7 +983,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_saldos_cuenta` (IN `p_numero_cue
     ORDER BY sm.Saldo DESC;
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_transacciones_usuario` (IN `p_nombre_completo` VARCHAR(201), IN `p_tipo_transaccion` VARCHAR(50))   BEGIN
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_transacciones_usuario` (IN `p_nombre_completo` VARCHAR(201) COLLATE utf8mb4_unicode_ci, IN `p_tipo_transaccion` VARCHAR(50))   BEGIN
     SELECT
         vtc.transaccion_id,
         vtc.tipo_transaccion,
@@ -1018,7 +1054,7 @@ INSERT INTO `cuenta` (`ID`, `Numero_cuenta`, `ID_Users`, `Tipo_cuenta`, `Estado`
 (6, '63788349202', 8, 'ahorro', 'activa', '2026-03-14 13:59:22', '2026-03-14 13:59:22'),
 (7, '1175271858800644', 9, 'ahorro', 'activa', '2026-03-14 14:09:12', '2026-03-14 14:09:12'),
 (8, '2141978225320079', 10, 'ahorro', 'activa', '2026-03-14 16:50:19', '2026-03-14 16:50:19'),
-(9, '3520899553795811', 11, 'ahorro', 'activa', '2026-03-14 20:40:09', '2026-03-14 20:49:17');
+(10, '5322132993910809', 12, 'ahorro', 'activa', '2026-04-17 15:13:41', '2026-04-17 15:13:41');
 
 -- --------------------------------------------------------
 
@@ -1075,7 +1111,7 @@ INSERT INTO `persona` (`ID`, `Nombre`, `Apellido`, `Direccion`, `Telefono`, `Eda
 (8, 'Rafael Ignacion', 'Lovera Arancibia', 'Calle Falsa 123', '6207302', 21, '2026-03-14 13:59:22', '2026-03-14 13:59:22'),
 (9, 'Carlos', 'Mamani', 'Calle 21 de Enero 456', '76543210', 25, '2026-03-14 14:09:12', '2026-03-14 14:09:12'),
 (10, 'Carlos', 'Mamani Choque', 'Calle 21 de Enero 456', '76543210', 25, '2026-03-14 16:50:19', '2026-03-14 16:50:19'),
-(11, 'Jaziel Armando', 'Vargas Choque', 'Calle 21 de Enero 456', '76543210', 25, '2026-03-14 20:40:09', '2026-03-14 20:40:09');
+(12, 'Jaziel Armando', 'Vargas Choque', 'Calle 21 de Enero 456', '76543210', 25, '2026-04-17 15:13:41', '2026-04-17 15:13:41');
 
 -- --------------------------------------------------------
 
@@ -1122,10 +1158,8 @@ INSERT INTO `saldo_moneda` (`ID`, `ID_Cuenta`, `ID_Moneda`, `Saldo`, `Fecha_crea
 (2, 6, 1, 299.00, '2026-03-14 18:22:57', '2026-03-15 13:40:23'),
 (3, 7, 1, 0.00, '2026-03-14 18:22:57', '2026-03-14 21:05:09'),
 (4, 8, 1, 0.00, '2026-03-14 18:22:57', '2026-03-14 21:05:09'),
-(10, 9, 1, 700.00, '2026-03-14 20:49:17', '2026-03-15 13:40:23'),
-(11, 9, 2, 2062.45, '2026-03-14 23:00:43', '2026-03-15 13:41:56'),
 (12, 6, 2, 13.00, '2026-03-15 09:43:29', '2026-03-15 09:43:29'),
-(13, 9, 3, 13.79, '2026-03-15 12:27:36', '2026-03-15 12:27:36');
+(14, 10, 1, 100000000000.00, '2026-04-17 15:13:41', '2026-04-17 15:19:58');
 
 -- --------------------------------------------------------
 
@@ -1199,7 +1233,7 @@ INSERT INTO `tarjeta` (`ID`, `ID_Users`, `ID_Cuenta`, `Numero_tarjeta`, `Pin`, `
 (6, 8, 6, '10000277192', '$2b$10$NuwfhS9hN6OH2TT8Kpnkk.bxMxqBdILSynacw7clvWk0wRwLw31gi', 'debito', 'activa', '2025-12-31', '2026-03-14 13:59:22', '2026-03-14 13:59:22'),
 (7, 9, 7, '5500112233445566', '$2b$10$c3wUTXatKxoc8qDXsoJ5kutoMAXt5qhPlNVbLpbb1s511jEQrJYg.', 'debito', 'activa', '2031-03-14', '2026-03-14 14:09:12', '2026-03-14 14:09:12'),
 (8, 10, 8, '4141978347973558', '$2b$10$CjnIb.GEQ6sZvXWWuHiXyePSJobI.rlt5ufjDr5CedHJAJ/cpKHr6', 'debito', 'activa', '2031-03-14', '2026-03-14 16:50:19', '2026-03-14 16:50:19'),
-(9, 11, 9, '4520899596991226', '$2b$10$FqeDvoREWUWYrtrK7CvrOOVwopuKz1HMDODXNkno9nxHZxfyIP1IC', 'credito', 'activa', '2031-03-15', '2026-03-14 20:40:09', '2026-03-14 20:40:09');
+(10, 12, 10, '4322132935200525', '$2b$10$qMOcMyRS8urQdwYLbzUVZ.Pv.tK1JInXdAIY.X9WW0lQUDnKjmz8m', 'credito', 'activa', '2031-04-17', '2026-04-17 15:13:41', '2026-04-17 15:13:41');
 
 -- --------------------------------------------------------
 
@@ -1323,37 +1357,12 @@ CREATE TABLE `transacciones` (
 --
 
 INSERT INTO `transacciones` (`ID`, `ID_Cuenta_Transfiere`, `ID_Cuenta_Transferida`, `ID_Tipo_Transaccion`, `Monto`, `Saldo_anterior`, `Saldo_posterior`, `Metodo_transaccion`, `Estado`, `Descripcion`, `Fecha_transaccion`, `Fecha_creacion`, `Fecha_modificacion`) VALUES
-(14, 9, NULL, 2, 9999999999999.99, 0.00, 9999999999999.99, 'ATM', 'exitosa', 'Depósito en BOB | Tasa oficial: 1.00000000', '2026-03-14 20:49:17', '2026-03-14 20:49:17', '2026-03-14 20:49:17'),
-(15, 9, NULL, 2, 9999999999999.99, 9999999999999.99, 9999999999999.99, 'ATM', 'exitosa', 'Depósito en BOB | Tasa oficial: 1.00000000', '2026-03-14 20:49:56', '2026-03-14 20:49:56', '2026-03-14 20:49:56'),
-(16, 9, NULL, 1, 100.00, 9999999999999.99, 9999999999999.99, 'ATM', 'exitosa', 'Retiro directo en BOB | Tasa oficial: 1.00000000', '2026-03-14 22:52:20', '2026-03-14 22:52:20', '2026-03-14 22:52:20'),
-(17, 9, NULL, 1, 100.00, 9999999999999.99, 9999999999999.99, 'ATM', 'exitosa', 'Retiro directo en BOB | Tasa oficial: 1.00000000', '2026-03-14 22:52:38', '2026-03-14 22:52:38', '2026-03-14 22:52:38'),
-(18, 9, NULL, 1, 348.00, 9999999999999.99, 9999999999999.99, 'ATM', 'exitosa', 'Retiro (conv.) 50.000000 USD desde BOB | Tasa oficial: 6.96000000', '2026-03-14 22:55:13', '2026-03-14 22:55:13', '2026-03-14 22:55:13'),
-(19, 9, NULL, 2, 500.00, 9999999999999.99, 9999999999999.99, 'ATM', 'exitosa', 'Depósito 500.000000 BOB → 500.000000 BOB | Tasa oficial: 1.00000000', '2026-03-14 22:57:26', '2026-03-14 22:57:26', '2026-03-14 22:57:26'),
-(20, 9, NULL, 2, 100.00, 9999999999999.99, 9999999999999.99, 'ATM', 'exitosa', 'Depósito 100.000000 USD → 944.000000 BOB | Tasa binance: 9.44000000', '2026-03-14 22:58:11', '2026-03-14 22:58:11', '2026-03-14 22:58:11'),
-(21, 6, 9, 3, 200.00, 1000.00, 800.00, 'ATM', 'exitosa', 'Pago de deuda | 200.000000 BOB → 200.000000 BOB | Tasa oficial', '2026-03-14 23:00:22', '2026-03-14 23:00:22', '2026-03-14 23:00:22'),
-(22, 6, 9, 3, 100.00, 800.00, 700.00, 'web', 'exitosa', 'Transferencia internacional | 100.000000 BOB → 14.367816 USD | Tasa oficial', '2026-03-14 23:00:43', '2026-03-14 23:00:43', '2026-03-14 23:00:43'),
-(23, 6, 9, 3, 472.00, 700.00, 228.00, 'ATM', 'exitosa', 'Conversión confirmada | 472.000000 BOB → 472.000000 BOB | Tasa binance', '2026-03-14 23:01:17', '2026-03-14 23:01:17', '2026-03-14 23:01:17'),
-(24, 9, 6, 3, 471.00, 9999999999999.99, 9999999999999.99, 'ATM', 'exitosa', 'Conversión confirmada | 471.000000 BOB → 471.000000 BOB | Tasa binance', '2026-03-15 08:27:17', '2026-03-15 08:27:17', '2026-03-15 08:27:17'),
-(25, 9, 6, 3, 122.46, 0.00, -122.46, 'ATM', 'exitosa', 'Conversión confirmada | 13.000000 USD → 13.000000 USD | Tasa binance', '2026-03-15 09:43:29', '2026-03-15 09:43:29', '2026-03-15 09:43:29'),
-(26, 9, NULL, 1, 6.96, 0.00, -6.96, 'ATM', 'exitosa', 'Retiro directo en USD | Tasa oficial: 6.96000000', '2026-03-15 09:57:59', '2026-03-15 09:57:59', '2026-03-15 09:57:59'),
-(27, 9, NULL, 2, 4710.00, 0.00, 4710.00, 'ATM', 'exitosa', 'Depósito 500.000000 USD → 500.000000 USD | Tasa binance: 9.42000000', '2026-03-15 10:01:05', '2026-03-15 10:01:05', '2026-03-15 10:01:05'),
-(28, 9, NULL, 2, 500.00, 500.37, 1000.37, 'ATM', 'exitosa', 'Depósito directo 500.000000 USD', '2026-03-15 10:07:19', '2026-03-15 10:07:19', '2026-03-15 10:07:19'),
-(29, 9, NULL, 2, 500.00, 1000.37, 1053.45, 'ATM', 'exitosa', 'Depósito 500.000000 BOB → 53.078556 USD | Tasa binance: 1.00000000', '2026-03-15 10:07:41', '2026-03-15 10:07:41', '2026-03-15 10:07:41'),
-(30, 9, NULL, 2, 942.00, 5210.00, 6152.00, 'ATM', 'exitosa', 'Depósito 100.000000 USD → 942.000000 BOB | Tasa binance: 9.42000000', '2026-03-15 10:08:09', '2026-03-15 10:08:09', '2026-03-15 10:08:09'),
-(31, 6, 9, 3, 200.00, 699.00, 499.00, 'ATM', 'exitosa', 'Pago de deuda | 200.000000 BOB → 200.000000 BOB | Tasa oficial', '2026-03-15 10:08:29', '2026-03-15 10:08:29', '2026-03-15 10:08:29'),
-(32, 9, NULL, 2, 942.00, 6352.00, 7294.00, 'ATM', 'exitosa', 'Depósito 100.000000 USD → 942.000000 BOB | Tasa binance: 9.42000000', '2026-03-15 10:09:13', '2026-03-15 10:09:13', '2026-03-15 10:09:13'),
-(33, 9, NULL, 2, 10.00, 1053.45, 1063.45, 'ATM', 'exitosa', 'Depósito directo 10.000000 USD', '2026-03-15 12:11:51', '2026-03-15 12:11:51', '2026-03-15 12:11:51'),
-(34, 9, NULL, 2, 104.33, 0.00, 13.79, 'ATM', 'exitosa', 'Depósito 14.990000 USD → 13.790747 EUR | Tasa oficial: 6.96000000', '2026-03-15 12:27:36', '2026-03-15 12:27:36', '2026-03-15 12:27:36'),
-(35, 9, NULL, 2, 500.00, 1063.45, 1563.45, 'ATM', 'exitosa', 'Depósito directo 500.000000 USD', '2026-03-15 12:49:56', '2026-03-15 12:49:56', '2026-03-15 12:49:56'),
-(36, 9, NULL, 1, 6.96, 7398.33, 7391.37, 'ATM', 'exitosa', 'Retiro directo en USD | Tasa oficial: 6.96000000', '2026-03-15 13:11:21', '2026-03-15 13:11:21', '2026-03-15 13:11:21'),
-(37, 9, NULL, 1, 6.96, 7391.37, 7384.41, 'ATM', 'exitosa', 'Retiro directo en BOB | Tasa oficial: 1.00000000', '2026-03-15 13:13:44', '2026-03-15 13:13:44', '2026-03-15 13:13:44'),
-(38, 9, NULL, 2, 500.00, 0.00, 500.00, 'ATM', 'exitosa', 'Depósito directo 500.000000 BOB', '2026-03-15 13:20:26', '2026-03-15 13:20:26', '2026-03-15 13:20:26'),
-(39, 9, NULL, 1, 500.00, 500.00, 0.00, 'ATM', 'exitosa', 'Retiro directo en BOB | Tasa oficial: 1.00000000', '2026-03-15 13:22:25', '2026-03-15 13:22:25', '2026-03-15 13:22:25'),
-(40, 9, NULL, 2, 500.00, 0.00, 500.00, 'ATM', 'exitosa', 'Depósito directo 500.000000 BOB', '2026-03-15 13:28:33', '2026-03-15 13:28:33', '2026-03-15 13:28:33'),
-(41, 9, NULL, 2, 500.00, 500.00, 1000.00, 'ATM', 'exitosa', 'Depósito directo 500.000000 BOB', '2026-03-15 13:39:23', '2026-03-15 13:39:23', '2026-03-15 13:39:23'),
-(42, 9, NULL, 1, 500.00, 1000.00, 500.00, 'ATM', 'exitosa', 'Retiro directo en BOB | Tasa oficial: 1.00000000', '2026-03-15 13:39:49', '2026-03-15 13:39:49', '2026-03-15 13:39:49'),
-(43, 6, 9, 3, 200.00, 499.00, 299.00, 'ATM', 'exitosa', 'Pago de deuda | 200.000000 BOB → 200.000000 BOB | Tasa oficial', '2026-03-15 13:40:23', '2026-03-15 13:40:23', '2026-03-15 13:40:23'),
-(44, 9, NULL, 2, 500.00, 1562.45, 2062.45, 'ATM', 'exitosa', 'Depósito directo 500.000000 USD', '2026-03-15 13:41:56', '2026-03-15 13:41:56', '2026-03-15 13:41:56');
+(21, 6, NULL, 3, 200.00, 1000.00, 800.00, 'ATM', 'exitosa', 'Pago de deuda | 200.000000 BOB → 200.000000 BOB | Tasa oficial', '2026-03-14 23:00:22', '2026-03-14 23:00:22', '2026-03-14 23:00:22'),
+(22, 6, NULL, 3, 100.00, 800.00, 700.00, 'web', 'exitosa', 'Transferencia internacional | 100.000000 BOB → 14.367816 USD | Tasa oficial', '2026-03-14 23:00:43', '2026-03-14 23:00:43', '2026-03-14 23:00:43'),
+(23, 6, NULL, 3, 472.00, 700.00, 228.00, 'ATM', 'exitosa', 'Conversión confirmada | 472.000000 BOB → 472.000000 BOB | Tasa binance', '2026-03-14 23:01:17', '2026-03-14 23:01:17', '2026-03-14 23:01:17'),
+(31, 6, NULL, 3, 200.00, 699.00, 499.00, 'ATM', 'exitosa', 'Pago de deuda | 200.000000 BOB → 200.000000 BOB | Tasa oficial', '2026-03-15 10:08:29', '2026-03-15 10:08:29', '2026-03-15 10:08:29'),
+(43, 6, NULL, 3, 200.00, 499.00, 299.00, 'ATM', 'exitosa', 'Pago de deuda | 200.000000 BOB → 200.000000 BOB | Tasa oficial', '2026-03-15 13:40:23', '2026-03-15 13:40:23', '2026-03-15 13:40:23'),
+(45, 10, NULL, 2, 100000000000.00, 0.00, 100000000000.00, 'ATM', 'exitosa', 'Depósito directo 100000000000.000000 BOB', '2026-04-17 15:19:58', '2026-04-17 15:19:58', '2026-04-17 15:19:58');
 
 -- --------------------------------------------------------
 
@@ -1380,7 +1389,7 @@ INSERT INTO `users` (`ID`, `ID_Persona`, `ID_Rol`, `Correo`, `Contrasena`, `Esta
 (8, 8, 2, 'rafaellovera@gmail.com', '$2b$10$uEQ4kNKnARDGGNQXgNdDGOi6sf6NO6n7v2M1/Dwmp7Z9TvGF1Nb3O', 'activo', '2026-03-14 13:59:22', '2026-03-14 13:59:22'),
 (9, 9, 2, 'carlos.mamani@gmail.com', '$2b$10$g5hYOglaDDtiKgnEh2mJPOYaE.pd5Mn7TjFp6vsVFKlFDX0pe6E6C', 'activo', '2026-03-14 14:09:12', '2026-03-14 14:09:12'),
 (10, 10, 2, 'carlos.prueba@gmail.com', '$2b$10$hT6oV3LKueQWw6VeiLy90u1hH1YEYzS47qGKLM8M1Tc1OAGw60fHq', 'activo', '2026-03-14 16:50:19', '2026-03-14 16:50:19'),
-(11, 11, 2, 'jazielarmandovargaschoque@gmail.com', '$2b$10$KVQXrPLUUg0I3RP4etXPWeUSwqMdxhVVf4jyPf24BBrWsHkAG5.62', 'activo', '2026-03-14 20:40:09', '2026-03-14 20:40:09');
+(12, 12, 2, 'jazielarmandovargaschoque@gmail.com', '$2b$10$2aJJQGQxQByzVlO7tk5kJudTTNWEEN7epBSLYEb2ypinGUFc/AJ3W', 'activo', '2026-04-17 15:13:41', '2026-04-17 15:13:41');
 
 -- --------------------------------------------------------
 
@@ -1405,14 +1414,6 @@ CREATE TABLE `vista_cuentas_resumen` (
 ,`Codigo_moneda` varchar(10)
 ,`saldo_moneda` decimal(20,2)
 );
-
--- --------------------------------------------------------
-
---
--- Estructura Stand-in para la vista `vista_estadisticas_sistema`
--- (Véase abajo para la vista actual)
---
-
 
 -- --------------------------------------------------------
 
@@ -1488,11 +1489,6 @@ CREATE TABLE `vista_usuarios_completo` (
 DROP TABLE IF EXISTS `vista_cuentas_resumen`;
 
 CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `vista_cuentas_resumen`  AS SELECT `c`.`ID` AS `cuenta_id`, `c`.`Numero_cuenta` AS `Numero_cuenta`, `c`.`Tipo_cuenta` AS `Tipo_cuenta`, `sm`.`Saldo` AS `saldo_bob`, `c`.`Estado` AS `estado_cuenta`, `c`.`Fecha_creacion` AS `fecha_apertura`, `u`.`ID` AS `usuario_id`, concat(`p`.`Nombre`,' ',`p`.`Apellido`) AS `nombre_titular`, `u`.`Correo` AS `Correo`, `tar`.`Numero_tarjeta` AS `Numero_tarjeta`, `tar`.`Tipo_tarjeta` AS `Tipo_tarjeta`, `tar`.`Estado` AS `estado_tarjeta`, `tar`.`Fecha_vencimiento` AS `Fecha_vencimiento`, `m`.`Codigo` AS `Codigo_moneda`, `sm`.`Saldo` AS `saldo_moneda` FROM (((((`cuenta` `c` join `users` `u` on(`c`.`ID_Users` = `u`.`ID`)) join `persona` `p` on(`u`.`ID_Persona` = `p`.`ID`)) left join `tarjeta` `tar` on(`tar`.`ID_Cuenta` = `c`.`ID`)) left join `saldo_moneda` `sm` on(`sm`.`ID_Cuenta` = `c`.`ID`)) left join `moneda` `m` on(`sm`.`ID_Moneda` = `m`.`ID`)) ;
-
--- --------------------------------------------------------
-
---
--- Estructura para la vista `vista_estadisticas_sistema`
 
 -- --------------------------------------------------------
 
@@ -1644,7 +1640,7 @@ ALTER TABLE `cambio`
 -- AUTO_INCREMENT de la tabla `cuenta`
 --
 ALTER TABLE `cuenta`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT de la tabla `moneda`
@@ -1656,7 +1652,7 @@ ALTER TABLE `moneda`
 -- AUTO_INCREMENT de la tabla `persona`
 --
 ALTER TABLE `persona`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT de la tabla `rol`
@@ -1668,7 +1664,7 @@ ALTER TABLE `rol`
 -- AUTO_INCREMENT de la tabla `saldo_moneda`
 --
 ALTER TABLE `saldo_moneda`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT de la tabla `sesion_atm`
@@ -1680,7 +1676,7 @@ ALTER TABLE `sesion_atm`
 -- AUTO_INCREMENT de la tabla `tarjeta`
 --
 ALTER TABLE `tarjeta`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT de la tabla `tasa_cambio`
@@ -1704,13 +1700,13 @@ ALTER TABLE `tipo_transaccion`
 -- AUTO_INCREMENT de la tabla `transacciones`
 --
 ALTER TABLE `transacciones`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=45;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=46;
 
 --
 -- AUTO_INCREMENT de la tabla `users`
 --
 ALTER TABLE `users`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- Restricciones para tablas volcadas

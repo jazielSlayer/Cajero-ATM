@@ -6,7 +6,9 @@ POST {{api}}/login
 Content-Type: application/json
 
 {
-    "numero_tarjeta": "1000282973",
-    "contrasena": "DrXeno79TESLA",
-    "pin": "777"
+    "numero_tarjeta": "4520899596991226",
+    "contrasena": "$2b$10$KVQXrPLUUg0I3RP4etXPWeUSwqMdxhVVf4jyPf24BBrWsHkAG5.62",
+    "pin": "$2b$10$FqeDvoREWUWYrtrK7CvrOOVwopuKz1HMDODXNkno9nxHZxfyIP1IC"
 }
+
+

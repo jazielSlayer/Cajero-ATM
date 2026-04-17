@@ -1,7 +1,168 @@
 import { connect } from "../database.js";
-import bcrypt from 'bcrypt';
+import bcrypt from "bcrypt";
+import {
+    generarCodigo,
+    guardarCodigo,
+    validarCodigo,
+    correoEstaVerificado,
+    limpiarVerificacion,
+} from "./verificacion_email/emailVerificacion.js";
+import { enviarCodigoVerificacion, enviarDatosRegistro } from "./verificacion_email/mailer.js";
 
 const SALT_ROUNDS = 10;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PASO 1 – Solicitar código de verificación
+// ─────────────────────────────────────────────────────────────────────────────
+export const solicitarVerificacion = async (req, res) => {
+    const { correo } = req.body;
+
+    if (!correo) {
+        return res.status(400).json({ error: "El campo correo es requerido." });
+    }
+
+    // Verificar que el correo no esté ya registrado
+    const connection = await connect();
+    const [[existente]] = await connection.query(
+        "SELECT ID FROM Users WHERE Correo = ? LIMIT 1",
+        [correo]
+    );
+    if (existente) {
+        return res.status(409).json({ error: "Este correo ya está registrado." });
+    }
+
+    const codigo = generarCodigo();
+    guardarCodigo(correo, codigo);
+
+    try {
+        await enviarCodigoVerificacion(correo, codigo);
+        return res.json({
+            mensaje: `Código de verificación enviado a ${correo}. Válido por 10 minutos.`,
+        });
+    } catch (err) {
+        console.error("Error al enviar código:", err);
+        return res.status(500).json({ error: "No se pudo enviar el correo. Verifica la dirección." });
+    }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PASO 2 – Confirmar código
+// ─────────────────────────────────────────────────────────────────────────────
+export const confirmarCodigo = (req, res) => {
+    const { correo, codigo } = req.body;
+
+    if (!correo || !codigo) {
+        return res.status(400).json({ error: "correo y codigo son requeridos." });
+    }
+
+    const resultado = validarCodigo(correo, codigo.trim());
+
+    if (!resultado.ok) {
+        return res.status(400).json({ error: resultado.motivo });
+    }
+
+    return res.json({ mensaje: "Correo verificado correctamente. Ya puedes completar el registro." });
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PASO 3 – Crear usuario (solo si el correo fue verificado)
+// ─────────────────────────────────────────────────────────────────────────────
+function generarPin() {
+    return Math.floor(1000 + Math.random() * 9000).toString();
+}
+function generarNumeroCuenta() {
+    const timestamp = Date.now().toString().slice(-8);
+    const random    = Math.floor(10000000 + Math.random() * 90000000).toString();
+    return timestamp + random;
+}
+function generarNumeroTarjeta() {
+    const timestamp = Date.now().toString().slice(-7);
+    const random    = Math.floor(100000000 + Math.random() * 900000000).toString();
+    return ("4" + timestamp + random).slice(0, 16);
+}
+function generarFechaVencimiento() {
+    const fecha = new Date();
+    fecha.setFullYear(fecha.getFullYear() + 5);
+    return fecha.toISOString().split("T")[0];
+}
+
+export const createUser = async (req, res) => {
+    const {
+        nombre, apellido, direccion, telefono, edad,
+        correo, contrasena,
+        tipo_tarjeta, tipo_cuenta,
+    } = req.body;
+
+    // ── Verificar que el correo haya pasado por el flujo de verificación ─────
+    if (!correoEstaVerificado(correo)) {
+        return res.status(403).json({
+            error: "El correo no ha sido verificado. Completa el proceso de verificación antes de registrarte.",
+        });
+    }
+
+    const connection = await connect();
+
+    try {
+        const pin               = generarPin();
+        const numero_cuenta     = generarNumeroCuenta();
+        const numero_tarjeta    = generarNumeroTarjeta();
+        const fecha_vencimiento = generarFechaVencimiento();
+        const saldo_inicial     = 0.00;
+        const id_rol            = 2;
+
+        const [contrasenaHash, pinHash] = await Promise.all([
+            bcrypt.hash(contrasena, SALT_ROUNDS),
+            bcrypt.hash(pin, SALT_ROUNDS),
+        ]);
+
+        await connection.query("SET @usuario_id = 0;");
+        await connection.query("SET @mensaje = '';");
+
+        await connection.query(
+            "CALL sp_registrar_usuario(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, @usuario_id, @mensaje)",
+            [
+                nombre, apellido, direccion, telefono, edad,
+                correo, contrasenaHash,
+                id_rol,
+                numero_cuenta, tipo_cuenta, saldo_inicial,
+                numero_tarjeta, pinHash, tipo_tarjeta, fecha_vencimiento,
+            ]
+        );
+
+        const [[output]] = await connection.query(
+            "SELECT @usuario_id AS usuario_id, @mensaje AS mensaje"
+        );
+
+        if (output.usuario_id === -1) {
+            return res.status(400).json({ error: output.mensaje });
+        }
+
+        // ── Registro exitoso: limpiar verificación y enviar datos por correo ─
+        limpiarVerificacion(correo);
+
+        try {
+            await enviarDatosRegistro(correo, {
+                nombre,
+                numero_cuenta,
+                numero_tarjeta,
+                pin,               // PIN en claro, solo en este correo
+                fecha_vencimiento,
+            });
+        } catch (mailErr) {
+            // El usuario fue creado; el error de correo es no crítico
+            console.error("Advertencia: usuario creado pero falló el envío del correo con datos:", mailErr);
+        }
+
+        return res.json({
+            usuarioId: output.usuario_id,
+            mensaje:   "Usuario registrado exitosamente. Se enviaron los datos de acceso a tu correo.",
+        });
+
+    } catch (err) {
+        console.error("Error al registrar usuario:", err);
+        return res.status(500).json({ error: "Error interno al intentar crear el usuario." });
+    }
+};
 
 export const DatosUsuario = async (req, res) => {
     const connection = await connect();
@@ -64,29 +225,6 @@ export const getUsuariosCompleto = async (req, res) => {
 };
 
 
-
-function generarPin() {
-    return Math.floor(1000 + Math.random() * 9000).toString();
-}
-
-function generarNumeroCuenta() {
-    const timestamp = Date.now().toString().slice(-8);
-    const random    = Math.floor(10000000 + Math.random() * 90000000).toString();
-    return timestamp + random; // 16 dígitos
-}
-
-function generarNumeroTarjeta() {
-    const prefijo  = "4";                // prefijo tipo Visa
-    const timestamp = Date.now().toString().slice(-7);
-    const random    = Math.floor(100000000 + Math.random() * 900000000).toString();
-    return (prefijo + timestamp + random).slice(0, 16); // exactamente 16 dígitos
-}
-
-function generarFechaVencimiento() {
-    const fecha = new Date();
-    fecha.setFullYear(fecha.getFullYear() + 5);
-    return fecha.toISOString().split('T')[0]; // YYYY-MM-DD
-}
 
 export const consultarSaldosUsuario = async (req, res) => {
     // El nombre completo viene como parámetro de ruta, puede tener espacios (URL-encoded)
@@ -169,67 +307,7 @@ export const consultarSaldosUsuario = async (req, res) => {
 };
  
 
-export const createUser = async (req, res) => {
-    const connection = await connect();
 
-    const {
-        nombre, apellido, direccion, telefono, edad,
-        correo, contrasena,
-        tipo_tarjeta, tipo_cuenta
-    } = req.body;
-
-    try {
-        // Valores autogenerados
-        const pin               = generarPin();
-        const numero_cuenta     = generarNumeroCuenta();
-        const numero_tarjeta    = generarNumeroTarjeta();
-        const fecha_vencimiento = generarFechaVencimiento();
-        const saldo_inicial     = 0.00;
-        const id_rol            = 2; // Cliente por defecto
-
-        // Hashear contraseña y PIN
-        const [contrasenaHash, pinHash] = await Promise.all([
-            bcrypt.hash(contrasena, SALT_ROUNDS),
-            bcrypt.hash(pin,        SALT_ROUNDS)
-        ]);
-
-        await connection.query('SET @usuario_id = 0;');
-        await connection.query("SET @mensaje = '';");
-
-        await connection.query(
-            'CALL sp_registrar_usuario(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, @usuario_id, @mensaje)',
-            [
-                nombre, apellido, direccion, telefono, edad,
-                correo, contrasenaHash,
-                id_rol,
-                numero_cuenta, tipo_cuenta, saldo_inicial,
-                numero_tarjeta, pinHash, tipo_tarjeta, fecha_vencimiento
-            ]
-        );
-
-        const [[output]] = await connection.query(
-            'SELECT @usuario_id AS usuario_id, @mensaje AS mensaje'
-        );
-
-        if (output.usuario_id === -1) {
-            return res.status(400).json({ error: output.mensaje });
-        }
-
-        // Devolver datos generados UNA sola vez para que el usuario los guarde
-        res.json({
-            usuarioId:        output.usuario_id,
-            mensaje:          output.mensaje,
-            numero_cuenta,
-            numero_tarjeta,   // mostrar solo aquí, viene de la generación automática
-            fecha_vencimiento,
-            pin               // solo se muestra aquí, nunca más se puede recuperar
-        });
-
-    } catch (err) {
-        console.error('Error al registrar usuario:', err);
-        res.status(500).json({ error: 'Error interno al intentar crear el usuario' });
-    }
-};
 
 
 
