@@ -11,7 +11,24 @@ Content-Type: application/json
     "nombre_completo": "Jaziel Armando Vargas cHoque"
 }
 
-###
+### PASO 1 - Solicitar código de verificación
+POST {{api}}/usuario/solicitar-verificacion
+Content-Type: application/json
+
+{
+    "correo": "jazielarmandovargaschoque@gmail.com"
+}
+
+### PASO 2 - Confirmar el código que llegó al correo
+POST {{api}}/usuario/confirmar-codigo
+Content-Type: application/json
+
+{
+    "correo": "jazielarmandovargaschoque@gmail.com",
+    "codigo": "691858"
+}
+
+### PASO 3 - Crear el usuario
 POST {{api}}/crear/usuario
 Content-Type: application/json
 

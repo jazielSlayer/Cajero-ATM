@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 17-04-2026 a las 21:24:08
+-- Tiempo de generación: 18-04-2026 a las 16:24:19
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.1.25
 
@@ -1054,7 +1054,8 @@ INSERT INTO `cuenta` (`ID`, `Numero_cuenta`, `ID_Users`, `Tipo_cuenta`, `Estado`
 (6, '63788349202', 8, 'ahorro', 'activa', '2026-03-14 13:59:22', '2026-03-14 13:59:22'),
 (7, '1175271858800644', 9, 'ahorro', 'activa', '2026-03-14 14:09:12', '2026-03-14 14:09:12'),
 (8, '2141978225320079', 10, 'ahorro', 'activa', '2026-03-14 16:50:19', '2026-03-14 16:50:19'),
-(10, '5322132993910809', 12, 'ahorro', 'activa', '2026-04-17 15:13:41', '2026-04-17 15:13:41');
+(12, '5704213255142001', 14, 'corriente', 'activa', '2026-04-17 16:17:22', '2026-04-17 16:17:22'),
+(14, '5851617743407592', 16, 'corriente', 'activa', '2026-04-17 16:41:56', '2026-04-17 16:41:56');
 
 -- --------------------------------------------------------
 
@@ -1111,7 +1112,8 @@ INSERT INTO `persona` (`ID`, `Nombre`, `Apellido`, `Direccion`, `Telefono`, `Eda
 (8, 'Rafael Ignacion', 'Lovera Arancibia', 'Calle Falsa 123', '6207302', 21, '2026-03-14 13:59:22', '2026-03-14 13:59:22'),
 (9, 'Carlos', 'Mamani', 'Calle 21 de Enero 456', '76543210', 25, '2026-03-14 14:09:12', '2026-03-14 14:09:12'),
 (10, 'Carlos', 'Mamani Choque', 'Calle 21 de Enero 456', '76543210', 25, '2026-03-14 16:50:19', '2026-03-14 16:50:19'),
-(12, 'Jaziel Armando', 'Vargas Choque', 'Calle 21 de Enero 456', '76543210', 25, '2026-04-17 15:13:41', '2026-04-17 15:13:41');
+(14, 'Rafael Ignacio', 'Lovera Arancivia', 'Av. Falsa', '45782983', 22, '2026-04-17 16:17:22', '2026-04-17 16:17:22'),
+(16, 'Jaziel Armando', 'Vargas Choque', 'Av. Falsa', '79532646', 21, '2026-04-17 16:41:56', '2026-04-17 16:41:56');
 
 -- --------------------------------------------------------
 
@@ -1159,7 +1161,8 @@ INSERT INTO `saldo_moneda` (`ID`, `ID_Cuenta`, `ID_Moneda`, `Saldo`, `Fecha_crea
 (3, 7, 1, 0.00, '2026-03-14 18:22:57', '2026-03-14 21:05:09'),
 (4, 8, 1, 0.00, '2026-03-14 18:22:57', '2026-03-14 21:05:09'),
 (12, 6, 2, 13.00, '2026-03-15 09:43:29', '2026-03-15 09:43:29'),
-(14, 10, 1, 100000000000.00, '2026-04-17 15:13:41', '2026-04-17 15:19:58');
+(16, 12, 1, 0.00, '2026-04-17 16:17:22', '2026-04-17 16:17:22'),
+(18, 14, 1, 0.00, '2026-04-17 16:41:56', '2026-04-17 16:41:56');
 
 -- --------------------------------------------------------
 
@@ -1233,7 +1236,8 @@ INSERT INTO `tarjeta` (`ID`, `ID_Users`, `ID_Cuenta`, `Numero_tarjeta`, `Pin`, `
 (6, 8, 6, '10000277192', '$2b$10$NuwfhS9hN6OH2TT8Kpnkk.bxMxqBdILSynacw7clvWk0wRwLw31gi', 'debito', 'activa', '2025-12-31', '2026-03-14 13:59:22', '2026-03-14 13:59:22'),
 (7, 9, 7, '5500112233445566', '$2b$10$c3wUTXatKxoc8qDXsoJ5kutoMAXt5qhPlNVbLpbb1s511jEQrJYg.', 'debito', 'activa', '2031-03-14', '2026-03-14 14:09:12', '2026-03-14 14:09:12'),
 (8, 10, 8, '4141978347973558', '$2b$10$CjnIb.GEQ6sZvXWWuHiXyePSJobI.rlt5ufjDr5CedHJAJ/cpKHr6', 'debito', 'activa', '2031-03-14', '2026-03-14 16:50:19', '2026-03-14 16:50:19'),
-(10, 12, 10, '4322132935200525', '$2b$10$qMOcMyRS8urQdwYLbzUVZ.Pv.tK1JInXdAIY.X9WW0lQUDnKjmz8m', 'credito', 'activa', '2031-04-17', '2026-04-17 15:13:41', '2026-04-17 15:13:41');
+(12, 14, 12, '4704213222089218', '$2b$10$z9yrQw6n4AES5wqcLtpiI.7h6QYakhMifGyQtB1u4B84j4ZaOLw1O', 'debito', 'activa', '2031-04-17', '2026-04-17 16:17:22', '2026-04-17 16:17:22'),
+(14, 16, 14, '4851617793844965', '$2b$10$p1sV2OKc8td/b2gXIFq8A.njo3.tVVsPCa5fxzryQeZz2OzSfb6n6', 'debito', 'activa', '2031-04-17', '2026-04-17 16:41:56', '2026-04-17 16:41:56');
 
 -- --------------------------------------------------------
 
@@ -1361,8 +1365,7 @@ INSERT INTO `transacciones` (`ID`, `ID_Cuenta_Transfiere`, `ID_Cuenta_Transferid
 (22, 6, NULL, 3, 100.00, 800.00, 700.00, 'web', 'exitosa', 'Transferencia internacional | 100.000000 BOB → 14.367816 USD | Tasa oficial', '2026-03-14 23:00:43', '2026-03-14 23:00:43', '2026-03-14 23:00:43'),
 (23, 6, NULL, 3, 472.00, 700.00, 228.00, 'ATM', 'exitosa', 'Conversión confirmada | 472.000000 BOB → 472.000000 BOB | Tasa binance', '2026-03-14 23:01:17', '2026-03-14 23:01:17', '2026-03-14 23:01:17'),
 (31, 6, NULL, 3, 200.00, 699.00, 499.00, 'ATM', 'exitosa', 'Pago de deuda | 200.000000 BOB → 200.000000 BOB | Tasa oficial', '2026-03-15 10:08:29', '2026-03-15 10:08:29', '2026-03-15 10:08:29'),
-(43, 6, NULL, 3, 200.00, 499.00, 299.00, 'ATM', 'exitosa', 'Pago de deuda | 200.000000 BOB → 200.000000 BOB | Tasa oficial', '2026-03-15 13:40:23', '2026-03-15 13:40:23', '2026-03-15 13:40:23'),
-(45, 10, NULL, 2, 100000000000.00, 0.00, 100000000000.00, 'ATM', 'exitosa', 'Depósito directo 100000000000.000000 BOB', '2026-04-17 15:19:58', '2026-04-17 15:19:58', '2026-04-17 15:19:58');
+(43, 6, NULL, 3, 200.00, 499.00, 299.00, 'ATM', 'exitosa', 'Pago de deuda | 200.000000 BOB → 200.000000 BOB | Tasa oficial', '2026-03-15 13:40:23', '2026-03-15 13:40:23', '2026-03-15 13:40:23');
 
 -- --------------------------------------------------------
 
@@ -1389,7 +1392,8 @@ INSERT INTO `users` (`ID`, `ID_Persona`, `ID_Rol`, `Correo`, `Contrasena`, `Esta
 (8, 8, 2, 'rafaellovera@gmail.com', '$2b$10$uEQ4kNKnARDGGNQXgNdDGOi6sf6NO6n7v2M1/Dwmp7Z9TvGF1Nb3O', 'activo', '2026-03-14 13:59:22', '2026-03-14 13:59:22'),
 (9, 9, 2, 'carlos.mamani@gmail.com', '$2b$10$g5hYOglaDDtiKgnEh2mJPOYaE.pd5Mn7TjFp6vsVFKlFDX0pe6E6C', 'activo', '2026-03-14 14:09:12', '2026-03-14 14:09:12'),
 (10, 10, 2, 'carlos.prueba@gmail.com', '$2b$10$hT6oV3LKueQWw6VeiLy90u1hH1YEYzS47qGKLM8M1Tc1OAGw60fHq', 'activo', '2026-03-14 16:50:19', '2026-03-14 16:50:19'),
-(12, 12, 2, 'jazielarmandovargaschoque@gmail.com', '$2b$10$2aJJQGQxQByzVlO7tk5kJudTTNWEEN7epBSLYEb2ypinGUFc/AJ3W', 'activo', '2026-04-17 15:13:41', '2026-04-17 15:13:41');
+(14, 14, 2, 'rafaelignaciolovera@gmail.com', '$2b$10$Q.G6z1DefpKy/.saJVounO5r7dWe9KU5JUCybA8swy5U58pH8u/pu', 'activo', '2026-04-17 16:17:22', '2026-04-17 16:17:22'),
+(16, 16, 2, 'jazielarmandovargaschoque@gmail.com', '$2b$10$C3tjo1KOV8J9KOp7/g7q6O5VrSfIhz2SZX3iIigVjZ.tajGJ6fEcS', 'activo', '2026-04-17 16:41:56', '2026-04-17 16:41:56');
 
 -- --------------------------------------------------------
 
@@ -1640,7 +1644,7 @@ ALTER TABLE `cambio`
 -- AUTO_INCREMENT de la tabla `cuenta`
 --
 ALTER TABLE `cuenta`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT de la tabla `moneda`
@@ -1652,7 +1656,7 @@ ALTER TABLE `moneda`
 -- AUTO_INCREMENT de la tabla `persona`
 --
 ALTER TABLE `persona`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- AUTO_INCREMENT de la tabla `rol`
@@ -1664,7 +1668,7 @@ ALTER TABLE `rol`
 -- AUTO_INCREMENT de la tabla `saldo_moneda`
 --
 ALTER TABLE `saldo_moneda`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
 
 --
 -- AUTO_INCREMENT de la tabla `sesion_atm`
@@ -1676,7 +1680,7 @@ ALTER TABLE `sesion_atm`
 -- AUTO_INCREMENT de la tabla `tarjeta`
 --
 ALTER TABLE `tarjeta`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT de la tabla `tasa_cambio`
@@ -1706,7 +1710,7 @@ ALTER TABLE `transacciones`
 -- AUTO_INCREMENT de la tabla `users`
 --
 ALTER TABLE `users`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- Restricciones para tablas volcadas
