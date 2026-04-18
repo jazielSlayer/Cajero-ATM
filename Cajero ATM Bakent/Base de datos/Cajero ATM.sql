@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 18-04-2026 a las 17:10:26
+-- Tiempo de generación: 18-04-2026 a las 20:18:59
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.1.25
 
@@ -117,6 +117,24 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_cuentas_por_tarjeta` (IN `p_nume
     ORDER BY tc.Orden ASC;
 END$$
 
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_cuentas_usuario` (IN `p_nombre_completo` VARCHAR(201) COLLATE utf8mb4_unicode_ci)   BEGIN
+    SELECT 
+        cr.Numero_cuenta,
+        cr.Tipo_cuenta,
+        cr.estado_cuenta,
+        cr.saldo_bob,
+        cr.Es_principal,
+        cr.orden_cuenta,
+        cr.Numero_tarjeta,
+        cr.Tipo_tarjeta,
+        cr.estado_tarjeta,
+        cr.Fecha_vencimiento,
+        cr.fecha_apertura
+    FROM vista_cuentas_resumen cr
+    WHERE cr.nombre_titular = p_nombre_completo
+    ORDER BY cr.orden_cuenta ASC;
+END$$
+
 CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_datos_usuario_por_nombre` (IN `p_nombre_completo` VARCHAR(201) COLLATE utf8mb4_unicode_ci)   BEGIN
     -- Datos del usuario con cuenta, tarjeta y Pin (hash bcrypt)
     SELECT
@@ -201,6 +219,66 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_desvincular_cuenta_tarjeta` (IN 
             SET p_mensaje = 'Cuenta desvinculada exitosamente.';
         END IF;
     END IF;
+END$$
+
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_estado_cuenta` (IN `p_nombre_completo` VARCHAR(201) COLLATE utf8mb4_unicode_ci)   BEGIN
+
+    -- Resultado 1: Datos básicos del usuario
+    SELECT 
+        vuc.usuario_id,
+        vuc.Correo,
+        vuc.estado_usuario,
+        vuc.fecha_registro,
+        vuc.Nombre,
+        vuc.Apellido,
+        vuc.nombre_completo,
+        vuc.Direccion,
+        vuc.Telefono,
+        vuc.Edad,
+        vuc.rol
+    FROM vista_usuarios_completo vuc
+    WHERE vuc.nombre_completo = p_nombre_completo
+    LIMIT 1;
+
+    -- Resultado 2: Todas las cuentas del usuario
+    SELECT 
+        cr.Numero_cuenta,
+        cr.Tipo_cuenta,
+        cr.estado_cuenta,
+        cr.saldo_bob,
+        cr.Es_principal,
+        cr.orden_cuenta,
+        cr.Numero_tarjeta,
+        cr.Tipo_tarjeta,
+        cr.estado_tarjeta,
+        cr.Fecha_vencimiento,
+        cr.fecha_apertura
+    FROM vista_cuentas_resumen cr
+    WHERE cr.nombre_titular = p_nombre_completo
+    ORDER BY cr.orden_cuenta ASC;
+
+    -- Resultado 3: Últimas 20 transacciones (puedes cambiar el LIMIT si quieres más/menos)
+    SELECT 
+        vtc.transaccion_id,
+        vtc.tipo_transaccion,
+        vtc.Monto,
+        vtc.Saldo_anterior,
+        vtc.Saldo_posterior,
+        vtc.cuenta_origen,
+        vtc.cuenta_destino,
+        vtc.nombre_destinatario,
+        vtc.correo_destinatario,
+        vtc.Metodo_transaccion,
+        vtc.estado_transaccion,
+        vtc.Descripcion,
+        vtc.Fecha_transaccion
+    FROM vista_transacciones_completo vtc
+    INNER JOIN vista_usuarios_completo vuc 
+        ON vtc.usuario_id = vuc.usuario_id
+    WHERE vuc.nombre_completo = p_nombre_completo
+    ORDER BY vtc.Fecha_transaccion DESC
+    LIMIT 20;
+
 END$$
 
 CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito` (IN `p_correo` VARCHAR(150) COLLATE utf8mb4_unicode_ci, IN `p_monto` DECIMAL(20,6), IN `p_id_moneda` INT, IN `p_metodo` ENUM('ATM','web','app_movil'), IN `p_contrasena` VARCHAR(255), IN `p_pin` VARCHAR(255), IN `p_tasa` DECIMAL(20,8), IN `p_tipo_tasa` ENUM('oficial','binance','manual'), OUT `p_transaccion_id` INT, OUT `p_mensaje` VARCHAR(255))   BEGIN
@@ -753,11 +831,14 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia_multimone
     DECLARE v_hay_conversion       TINYINT(1) DEFAULT 0;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
-    BEGIN
-        ROLLBACK;
-        SET p_transaccion_id = -1;
-        SET p_mensaje = 'Error interno: Transferencia cancelada.';
-    END;
+BEGIN
+    GET DIAGNOSTICS CONDITION 1
+        @err_code = MYSQL_ERRNO,
+        @err_msg  = MESSAGE_TEXT;
+    ROLLBACK;
+    SET p_transaccion_id = -1;
+    SET p_mensaje = CONCAT('Error SQL #', @err_code, ': ', @err_msg);
+END;
 
     SELECT ID     INTO v_id_bob          FROM moneda WHERE Codigo = 'BOB' LIMIT 1;
     SELECT Codigo INTO v_codigo_origen   FROM moneda WHERE ID = p_id_moneda_origen  LIMIT 1;
@@ -1257,7 +1338,7 @@ INSERT INTO `saldo_moneda` (`ID`, `ID_Cuenta`, `ID_Moneda`, `Saldo`, `Fecha_crea
 (4, 8, 1, 0.00, '2026-03-14 18:22:57', '2026-03-14 21:05:09'),
 (12, 6, 2, 13.00, '2026-03-15 09:43:29', '2026-03-15 09:43:29'),
 (16, 12, 1, 0.00, '2026-04-17 16:17:22', '2026-04-17 16:17:22'),
-(18, 14, 1, 0.00, '2026-04-17 16:41:56', '2026-04-17 16:41:56');
+(18, 14, 1, 3342.49, '2026-04-17 16:41:56', '2026-04-18 14:07:55');
 
 -- --------------------------------------------------------
 
@@ -1452,10 +1533,10 @@ CREATE TABLE `tasa_cambio_cache` (
 --
 
 INSERT INTO `tasa_cambio_cache` (`ID`, `Moneda_origen`, `Moneda_destino`, `Tasa`, `Tipo_tasa`, `Fecha_actualizacion`) VALUES
-(1, 'BOB', 'USD', 0.14, 'oficial', '2026-03-15 13:11:21'),
-(2, 'USD', 'BOB', 6.96, 'oficial', '2026-03-15 13:11:21'),
-(3, 'BOB', 'USD', 0.11, 'binance', '2026-03-15 13:11:21'),
-(4, 'USD', 'BOB', 9.42, 'binance', '2026-03-15 13:11:21');
+(1, 'BOB', 'USD', 0.14, 'oficial', '2026-04-18 14:07:55'),
+(2, 'USD', 'BOB', 6.96, 'oficial', '2026-04-18 14:07:55'),
+(3, 'BOB', 'USD', 0.11, 'binance', '2026-04-18 14:07:55'),
+(4, 'USD', 'BOB', 9.50, 'binance', '2026-04-18 14:07:55');
 
 -- --------------------------------------------------------
 
@@ -1536,7 +1617,14 @@ INSERT INTO `transacciones` (`ID`, `ID_Cuenta_Transfiere`, `ID_Cuenta_Transferid
 (22, 6, NULL, 3, 100.00, 800.00, 700.00, 'web', 'exitosa', 'Transferencia internacional | 100.000000 BOB → 14.367816 USD | Tasa oficial', '2026-03-14 23:00:43', '2026-03-14 23:00:43', '2026-03-14 23:00:43'),
 (23, 6, NULL, 3, 472.00, 700.00, 228.00, 'ATM', 'exitosa', 'Conversión confirmada | 472.000000 BOB → 472.000000 BOB | Tasa binance', '2026-03-14 23:01:17', '2026-03-14 23:01:17', '2026-03-14 23:01:17'),
 (31, 6, NULL, 3, 200.00, 699.00, 499.00, 'ATM', 'exitosa', 'Pago de deuda | 200.000000 BOB → 200.000000 BOB | Tasa oficial', '2026-03-15 10:08:29', '2026-03-15 10:08:29', '2026-03-15 10:08:29'),
-(43, 6, NULL, 3, 200.00, 499.00, 299.00, 'ATM', 'exitosa', 'Pago de deuda | 200.000000 BOB → 200.000000 BOB | Tasa oficial', '2026-03-15 13:40:23', '2026-03-15 13:40:23', '2026-03-15 13:40:23');
+(43, 6, NULL, 3, 200.00, 499.00, 299.00, 'ATM', 'exitosa', 'Pago de deuda | 200.000000 BOB → 200.000000 BOB | Tasa oficial', '2026-03-15 13:40:23', '2026-03-15 13:40:23', '2026-03-15 13:40:23'),
+(46, 14, NULL, 2, 500.00, 0.00, 500.00, 'ATM', 'exitosa', 'Deposito directo 500.000000 BOB', '2026-04-18 11:42:20', '2026-04-18 11:42:20', '2026-04-18 11:42:20'),
+(47, 14, NULL, 2, 951.00, 500.00, 1451.00, 'ATM', 'exitosa', 'Deposito 100.000000 USD -> 951.000000 BOB | Tasa binance: 9.51000000', '2026-04-18 11:42:53', '2026-04-18 11:42:53', '2026-04-18 11:42:53'),
+(48, 14, NULL, 1, 500.00, 1451.00, 951.00, 'ATM', 'exitosa', 'Retiro directo en BOB | Tasa oficial: 1.00000000', '2026-04-18 11:43:58', '2026-04-18 11:43:58', '2026-04-18 11:43:58'),
+(49, 14, NULL, 1, 9.51, 951.00, 941.49, 'ATM', 'exitosa', 'Retiro (conv.) 1.000000 USD desde BOB | Tasa binance: 9.51000000', '2026-04-18 11:44:35', '2026-04-18 11:44:35', '2026-04-18 11:44:35'),
+(50, 14, NULL, 2, 500.00, 941.49, 1441.49, 'ATM', 'exitosa', 'Deposito directo 500.000000 BOB', '2026-04-18 11:44:53', '2026-04-18 11:44:53', '2026-04-18 11:44:53'),
+(51, 14, NULL, 2, 951.00, 1441.49, 2392.49, 'ATM', 'exitosa', 'Deposito 100.000000 USD -> 951.000000 BOB | Tasa binance: 9.51000000', '2026-04-18 11:44:57', '2026-04-18 11:44:57', '2026-04-18 11:44:57'),
+(52, 14, NULL, 2, 950.00, 2392.49, 3342.49, 'ATM', 'exitosa', 'Deposito 100.000000 USD -> 950.000000 BOB | Tasa binance: 9.50000000', '2026-04-18 14:07:55', '2026-04-18 14:07:55', '2026-04-18 14:07:55');
 
 -- --------------------------------------------------------
 
@@ -1867,7 +1955,7 @@ ALTER TABLE `tarjeta`
 -- AUTO_INCREMENT de la tabla `tarjeta_cuenta`
 --
 ALTER TABLE `tarjeta_cuenta`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT de la tabla `tasa_cambio`
@@ -1879,7 +1967,7 @@ ALTER TABLE `tasa_cambio`
 -- AUTO_INCREMENT de la tabla `tasa_cambio_cache`
 --
 ALTER TABLE `tasa_cambio_cache`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=78;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=90;
 
 --
 -- AUTO_INCREMENT de la tabla `tipo_transaccion`
@@ -1891,7 +1979,7 @@ ALTER TABLE `tipo_transaccion`
 -- AUTO_INCREMENT de la tabla `transacciones`
 --
 ALTER TABLE `transacciones`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=46;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=53;
 
 --
 -- AUTO_INCREMENT de la tabla `users`
