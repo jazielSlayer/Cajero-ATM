@@ -1,14 +1,10 @@
 @api = http://localhost:3700
 
 ###
-### ✅ Así debe estar (con línea en blanco obligatoria)
 POST {{api}}/login
 Content-Type: application/json
 
 {
-    "numero_tarjeta": "4851617793844965",
-    "contrasena": "DrXeno79TESLA",
-    "pin": "5903"
+    "correo": "jazielarmandovargaschoque@gmail.com",
+    "contrasena": "DrXeno79TESLA"
 }
-
-

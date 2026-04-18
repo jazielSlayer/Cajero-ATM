@@ -3,12 +3,16 @@ import { connect } from "../database.js";
 
 export const loginUser = async (req, res) => {
     const connection = await connect();
-    const { numero_tarjeta, contrasena, pin } = req.body;
+    const { correo, contrasena } = req.body;  // ← solo estos dos campos
+
+    if (!correo || !contrasena) {
+        return res.status(400).json({ error: 'Correo y contraseña son requeridos' });
+    }
 
     try {
         const [rows] = await connection.query(
             'CALL sp_buscar_usuario_login(?)',
-            [numero_tarjeta]
+            [correo]
         );
 
         const usuario = rows[0]?.[0];
@@ -16,12 +20,9 @@ export const loginUser = async (req, res) => {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
 
-        const [contrasenaOk, pinOk] = await Promise.all([
-            bcrypt.compare(contrasena, usuario.contrasena_hash),
-            bcrypt.compare(pin,        usuario.pin_hash)
-        ]);
+        const contrasenaOk = await bcrypt.compare(contrasena, usuario.contrasena_hash);
 
-        if (!contrasenaOk || !pinOk) {
+        if (!contrasenaOk) {
             return res.status(401).json({ error: 'Credenciales incorrectas' });
         }
 

@@ -16,7 +16,7 @@ POST {{api}}/usuario/solicitar-verificacion
 Content-Type: application/json
 
 {
-    "correo": "jazielarmandovargaschoque@gmail.com"
+    "correo": "j.v.36977714@gmail.com"
 }
 
 ### PASO 2 - Confirmar el código que llegó al correo
@@ -24,8 +24,8 @@ POST {{api}}/usuario/confirmar-codigo
 Content-Type: application/json
 
 {
-    "correo": "jazielarmandovargaschoque@gmail.com",
-    "codigo": "691858"
+    "correo": "j.v.36977714@gmail.com",
+    "codigo": "625089"
 }
 
 ### PASO 3 - Crear el usuario
@@ -33,13 +33,13 @@ POST {{api}}/crear/usuario
 Content-Type: application/json
 
 {
-    "nombre": "Jaziel Armando",
+    "nombre": "Jaziel ",
     "apellido": "Vargas Choque",
     "direccion": "Calle 21 de Enero 456",
     "telefono": "76543210",
     "edad": 25,
-    "correo": "jazielarmandovargaschoque@gmail.com",
-    "contrasena": "DrXeno79TESLA",
+    "correo": "j.v.36977714@gmail.com",
+    "contrasena": "DrXeno79TESLA2",
     "tipo_tarjeta": "credito",
     "tipo_cuenta": "ahorro"
 }
