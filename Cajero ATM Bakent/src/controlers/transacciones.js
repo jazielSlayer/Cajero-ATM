@@ -68,22 +68,28 @@ export const realizarDeposito = async (req, res) => {
 
     try {
         // ── 1. Autenticación ──────────────────────────────────────────────────
-        const [[usuario]] = await connection.query(
-            `SELECT u.Contrasena AS contrasena_hash, tar.Pin AS pin_hash, c.ID AS cuenta_id
-             FROM   Users u
-             INNER JOIN Cuenta  c   ON c.ID_Users   = u.ID
-             INNER JOIN Tarjeta tar ON tar.ID_Cuenta = c.ID
-             WHERE  u.Correo = ? AND tar.Numero_tarjeta = ?
-               AND  u.Estado = 'activo' AND tar.Estado = 'activa'`,
-            [correo, numero_tarjeta]
-        );
+        const [[usuario]] = await connection.query(`
+            SELECT 
+                u.Contrasena AS contrasena_hash, 
+                tar.Pin      AS pin_hash
+            FROM Users u
+            INNER JOIN Tarjeta tar ON tar.ID_Users = u.ID
+            WHERE u.Correo = ?
+            AND tar.Numero_tarjeta = ?
+            AND u.Estado = 'activo'
+            AND tar.Estado = 'activa'
+            LIMIT 1
+        `, [correo, numero_tarjeta]);
+
         if (!usuario) {
             return res.status(404).json({ error: "Usuario o tarjeta no encontrada." });
         }
+
         const [contrasenaOk, pinOk] = await Promise.all([
             bcrypt.compare(String(contrasena), usuario.contrasena_hash),
             bcrypt.compare(String(pin),        usuario.pin_hash),
         ]);
+
         if (!contrasenaOk) return res.status(401).json({ error: "Contraseña incorrecta." });
         if (!pinOk)        return res.status(401).json({ error: "PIN incorrecto." });
 
@@ -209,12 +215,18 @@ export const realizarRetiro = async (req, res) => {
  
     try {
         // ── 1. Verificar tarjeta y PIN ────────────────────────────────────────
-        const [[tarjeta]] = await connection.query(
-            `SELECT tar.Pin AS pin_hash, tar.ID_Cuenta AS cuenta_id
-             FROM   Tarjeta tar
-             WHERE  tar.Numero_tarjeta = ? AND tar.Estado = 'activa'`,
-            [numero_tarjeta]
-        );
+        const [[tarjeta]] = await connection.query(`
+            SELECT 
+                tar.Pin AS pin_hash,
+                tc.ID_Cuenta AS cuenta_id
+            FROM Tarjeta tar
+            INNER JOIN tarjeta_cuenta tc ON tc.ID_Tarjeta = tar.ID
+            WHERE tar.Numero_tarjeta = ?
+            AND tar.Estado = 'activa'
+            AND tc.Es_principal = 1
+            LIMIT 1
+        `, 
+        [numero_tarjeta]);
         if (!tarjeta) {
             return res.status(404).json({ error: "Tarjeta no encontrada o no activa." });
         }

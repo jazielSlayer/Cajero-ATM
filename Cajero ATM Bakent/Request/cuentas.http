@@ -10,9 +10,9 @@ Content-Type: application/json
 }
 
 ###
-POST {{api}}/estado/cuenta/usuario
+POST {{api}}/cuentas/usuario
 Content-Type: application/json
 
 {
-    "nombre_completo": "Jaziel Armando Vargas cHoque "
+    "nombre_completo": "Jaziel Armando Vargas Choque "
 }
