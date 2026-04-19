@@ -1,0 +1,188 @@
+### ═══════════════════════════════════════════════════════════
+###  ACTIVIDAD — HTTP Requests
+###  Extensión: REST Client (VS Code) / Thunder Client
+### ═══════════════════════════════════════════════════════════
+
+@base            = http://localhost:3700
+@nombre_rafael   = Rafael Ignacio Lovera Arancivia
+@nombre_jaziel   = Jaziel Armando Vargas Choque
+@cuenta_rafael   = 5704213255142001
+@cuenta_jaziel   = 5851617743407592
+
+
+### ── 1. Actividad completa sin filtros ──────────────────
+POST {{base}}/actividad/completa
+Content-Type: application/json
+
+{
+  "nombre_completo": "Rafael Ignacio Lovera Arancivia"
+}
+
+###
+
+### ── 2. Filtro por rango de fechas ──────────────────────
+POST {{base}}/actividad/completa
+Content-Type: application/json
+
+{
+  "nombre_completo": "{{nombre_rafael}}",
+  "fecha_desde": "2026-04-01",
+  "fecha_hasta": "2026-04-30"
+}
+
+###
+
+### ── 3. Filtro por tipo: Deposito ───────────────────────
+POST {{base}}/actividad/completa
+Content-Type: application/json
+
+{
+  "nombre_completo": "{{nombre_rafael}}",
+  "tipo_transaccion": "Deposito"
+}
+
+###
+
+### ── 4. Filtro por tipo: Retiro ─────────────────────────
+POST {{base}}/actividad/completa
+Content-Type: application/json
+
+{
+  "nombre_completo": "{{nombre_rafael}}",
+  "tipo_transaccion": "Retiro"
+}
+
+###
+
+### ── 5. Filtro por tipo: Transferencia ──────────────────
+POST {{base}}/actividad/completa
+Content-Type: application/json
+
+{
+  "nombre_completo": "{{nombre_rafael}}",
+  "tipo_transaccion": "Transferencia"
+}
+
+###
+
+### ── 6. Búsqueda por palabra clave ──────────────────────
+POST {{base}}/actividad/completa
+Content-Type: application/json
+
+{
+  "nombre_completo": "{{nombre_rafael}}",
+  "palabra_clave": "Pago de deuda"
+}
+
+###
+
+### ── 7. Filtro por cuenta vinculada ─────────────────────
+POST {{base}}/actividad/completa
+Content-Type: application/json
+
+{
+  "nombre_completo": "{{nombre_rafael}}",
+  "numero_cuenta": "{{cuenta_jaziel}}"
+}
+
+###
+
+### ── 8. Todos los filtros combinados ─────────────────────
+POST {{base}}/actividad/completa
+Content-Type: application/json
+
+{
+  "nombre_completo": "{{nombre_rafael}}",
+  "fecha_desde": "2026-04-01",
+  "fecha_hasta": "2026-04-30",
+  "tipo_transaccion": "Transferencia",
+  "palabra_clave": "deuda",
+  "numero_cuenta": "{{cuenta_jaziel}}"
+}
+
+###
+
+### ── 9. Actividad de otro usuario ───────────────────────
+POST {{base}}/actividad/completa
+Content-Type: application/json
+
+{
+  "nombre_completo": "{{nombre_jaziel}}"
+}
+
+###
+
+### ── 10. Sin nombre_completo (debe dar 400) ──────────────
+POST {{base}}/actividad/completa
+Content-Type: application/json
+
+{}
+
+###
+
+### ── 11. Usuario inexistente (debe dar 404) ──────────────
+POST {{base}}/actividad/completa
+Content-Type: application/json
+
+{
+  "nombre_completo": "No Existe Usuario"
+}
+
+###
+
+
+### ═══════════════════════════════════════════════════════════
+###  EXPORTAR CSV
+### ═══════════════════════════════════════════════════════════
+
+### ── 12. Exportar todo sin filtros ──────────────────────
+POST {{base}}/actividad/exportar
+Content-Type: application/json
+
+{
+  "nombre_completo": "{{nombre_rafael}}"
+}
+
+###
+
+### ── 13. Exportar con filtro de fechas ───────────────────
+POST {{base}}/actividad/exportar
+Content-Type: application/json
+
+{
+  "nombre_completo": "{{nombre_rafael}}",
+  "fecha_desde": "2026-04-01",
+  "fecha_hasta": "2026-04-30"
+}
+
+###
+
+### ── 14. Exportar solo Depósitos ────────────────────────
+POST {{base}}/actividad/exportar
+Content-Type: application/json
+
+{
+  "nombre_completo": "{{nombre_rafael}}",
+  "tipo_transaccion": "Deposito"
+}
+
+###
+
+### ── 15. Exportar con búsqueda por palabra ───────────────
+POST {{base}}/actividad/exportar
+Content-Type: application/json
+
+{
+  "nombre_completo": "{{nombre_rafael}}",
+  "palabra_clave": "Deposito"
+}
+
+###
+
+### ── 16. Exportar usuario sin transacciones ─────────────
+POST {{base}}/actividad/exportar
+Content-Type: application/json
+
+{
+  "nombre_completo": "Jaziel  Vargas Choque"
+}

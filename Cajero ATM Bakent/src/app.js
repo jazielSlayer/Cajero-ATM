@@ -14,6 +14,7 @@ import cuentasYTransacciones from './routes/vistas/routes_cuentas_y_transaccione
 import estadisticaYSesiones from './routes/vistas/routes_estadistica_y_seciones';
 import tarjeta from './routes/routes_tarjeta';
 import  transacciones from './routes/routes_transacciones';
+import actividad from './routes/routes_actividad';
 import login from './routes/routes_login';
 import cuentas from './routes/routes_cuentas';
 
@@ -32,6 +33,8 @@ app.use(cuentasYTransacciones);
 app.use(estadisticaYSesiones);
 app.use(tarjeta);
 app.use(transacciones);
+app.use(actividad);
+
 app.use(login);
 app.use(cuentas);
 

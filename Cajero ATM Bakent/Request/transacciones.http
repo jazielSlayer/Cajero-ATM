@@ -59,7 +59,7 @@ Content-Type: application/json
   "moneda_origen": "USD",
   "moneda_destino": "BOB",
   "tipo_tasa": "binance",
-  "metodo": "ATM"
+  "metodo": "web"
 }
 
 ### ─── TRANSFERENCIA ─────────────────────────────────────────
