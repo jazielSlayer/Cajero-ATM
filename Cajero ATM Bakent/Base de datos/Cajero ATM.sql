@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 24-04-2026 a las 03:06:08
+-- Tiempo de generación: 24-04-2026 a las 07:05:21
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.1.25
 
@@ -462,7 +462,6 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito_multimoneda` (
             SET v_monto_bob = p_monto_origen * p_tasa;
         END IF;
 
-        -- Saldo actual en la moneda destino (antes de operar)
         SELECT ID, Saldo INTO v_saldo_dest_id, v_saldo_dest_actual
         FROM   saldo_moneda
         WHERE  ID_Cuenta = v_cuenta_id AND ID_Moneda = p_id_moneda_destino LIMIT 1;
@@ -478,6 +477,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito_multimoneda` (
         ELSE
             START TRANSACTION;
 
+            -- ✅ FIX: Solo acredita en la moneda destino, NO toca BOB en paralelo
             IF v_saldo_dest_id IS NULL THEN
                 INSERT INTO saldo_moneda (ID_Cuenta, ID_Moneda, Saldo)
                 VALUES (v_cuenta_id, p_id_moneda_destino, p_monto_destino);
@@ -485,13 +485,10 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito_multimoneda` (
                 UPDATE saldo_moneda SET Saldo = Saldo + p_monto_destino WHERE ID = v_saldo_dest_id;
             END IF;
 
-            IF v_hay_conversion = 1 AND p_id_moneda_destino != v_id_bob THEN
-                IF v_saldo_bob_id IS NULL THEN
-                    INSERT INTO saldo_moneda (ID_Cuenta, ID_Moneda, Saldo)
-                    VALUES (v_cuenta_id, v_id_bob, v_monto_bob);
-                ELSE
-                    UPDATE saldo_moneda SET Saldo = Saldo + v_monto_bob WHERE ID = v_saldo_bob_id;
-                END IF;
+            -- Si el depósito es en BOB directamente, actualiza BOB
+            IF p_id_moneda_destino = v_id_bob THEN
+                -- Ya fue actualizado arriba, nada extra
+                SET v_monto_bob = p_monto_destino;
             END IF;
 
             INSERT INTO Transacciones (
@@ -507,10 +504,8 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito_multimoneda` (
                 IF(v_hay_conversion = 1, v_monto_bob, p_monto_destino),
                 p_monto_origen,  v_codigo_origen,
                 p_monto_destino, v_codigo_destino,
-                -- Saldo_anterior / Saldo_posterior en BOB (referencia)
                 IFNULL(v_saldo_bob, 0),
-                IFNULL(v_saldo_bob, 0) + IF(v_hay_conversion = 1, v_monto_bob, p_monto_destino),
-                -- Saldo_anterior_original / Saldo_posterior_original en la moneda destino
+                IFNULL(v_saldo_bob, 0) + IF(p_id_moneda_destino = v_id_bob, p_monto_destino, 0),
                 IFNULL(v_saldo_dest_actual, 0),
                 IFNULL(v_saldo_dest_actual, 0) + p_monto_destino,
                 p_metodo, 'exitosa',
@@ -521,9 +516,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_deposito_multimoneda` (
             COMMIT;
             SET p_mensaje = IF(v_hay_conversion = 1,
                 CONCAT('Deposito exitoso. ', p_monto_origen, ' ', v_codigo_origen,
-                       ' -> acreditado: ', p_monto_destino, ' ', v_codigo_destino,
-                       ' | Equiv. BOB sumado: ', ROUND(v_monto_bob, 2),
-                       ' | Nuevo saldo BOB: ', ROUND(IFNULL(v_saldo_bob, 0) + v_monto_bob, 2)),
+                       ' -> acreditado: ', p_monto_destino, ' ', v_codigo_destino),
                 CONCAT('Deposito exitoso. ', p_monto_destino, ' ', v_codigo_destino,
                        ' | Nuevo saldo ', v_codigo_destino, ': ',
                        ROUND(IFNULL(v_saldo_dest_actual, 0) + p_monto_destino, 6))
@@ -585,6 +578,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro` (IN `p_pin` VAR
     IF v_cuenta_id IS NULL THEN
         SET p_transaccion_id = -1;
         SET p_mensaje = 'Error: No se encontro cuenta activa para ese PIN.';
+
     ELSEIF p_monto <= 0 THEN
         SET p_transaccion_id = -1;
         SET p_mensaje = 'Error: El monto debe ser mayor a 0.';
@@ -599,17 +593,15 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro` (IN `p_pin` VAR
                                    '. Disponible: ', v_saldo_moneda);
         ELSE
             START TRANSACTION;
+
+            -- ✅ FIX: Solo descuenta de la moneda solicitada, NO toca BOB
             UPDATE saldo_moneda SET Saldo = Saldo - p_monto WHERE ID = v_saldo_mon_id;
-            IF p_id_moneda != v_id_bob AND v_saldo_bob_id IS NOT NULL AND v_saldo_bob >= v_monto_bob THEN
-                UPDATE saldo_moneda SET Saldo = Saldo - v_monto_bob WHERE ID = v_saldo_bob_id;
-            END IF;
 
             INSERT INTO Transacciones (
                 ID_Cuenta_Transfiere, ID_Tipo_Transaccion,
                 Monto,
                 Monto_original,  Moneda_origen,
                 Saldo_anterior,  Saldo_posterior,
-                -- Saldo antes/después en la moneda real del retiro
                 Saldo_anterior_original,  Saldo_posterior_original,
                 Metodo_transaccion, Estado, Descripcion
             ) VALUES (
@@ -618,8 +610,8 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro` (IN `p_pin` VAR
                 p_monto,         v_codigo_moneda,
                 IFNULL(v_saldo_bob, v_saldo_moneda),
                 IFNULL(v_saldo_bob, v_saldo_moneda) - v_monto_bob,
-                v_saldo_moneda,             -- antes en moneda real
-                v_saldo_moneda - p_monto,   -- después en moneda real
+                v_saldo_moneda,
+                v_saldo_moneda - p_monto,
                 p_metodo, 'exitosa',
                 'Retiro'
             );
@@ -634,6 +626,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro` (IN `p_pin` VAR
         END IF;
 
     ELSE
+        -- Retiro desde BOB cuando no hay saldo en la moneda solicitada
         IF v_saldo_bob_id IS NULL OR v_saldo_bob < v_monto_bob THEN
             SET p_transaccion_id = -1;
             SET p_mensaje = CONCAT('Error: Saldo BOB insuficiente. Necesita ',
@@ -655,7 +648,6 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_retiro` (IN `p_pin` VAR
                 v_monto_bob,
                 p_monto,         v_codigo_moneda,
                 v_saldo_bob, v_saldo_bob - v_monto_bob,
-                -- En este caso se retiró desde BOB, saldo original = BOB
                 v_saldo_bob, v_saldo_bob - v_monto_bob,
                 p_metodo, 'exitosa',
                 'Retiro'
@@ -847,10 +839,8 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia_multimone
     DECLARE v_saldo_mon_origen     DECIMAL(20,6) DEFAULT 0;
     DECLARE v_saldo_mon_destino_id INT;
     DECLARE v_saldo_bob_origen_id  INT;
-    DECLARE v_saldo_bob_destino_id INT;
     DECLARE v_tipo_transferencia   INT;
     DECLARE v_monto_bob            DECIMAL(20,6);
-    DECLARE v_monto_bob_destino    DECIMAL(20,6);
     DECLARE v_codigo_origen        VARCHAR(10) COLLATE utf8mb4_unicode_ci;
     DECLARE v_codigo_destino       VARCHAR(10) COLLATE utf8mb4_unicode_ci;
     DECLARE v_id_bob               INT;
@@ -891,20 +881,10 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia_multimone
     FROM   saldo_moneda
     WHERE  ID_Cuenta = v_cuenta_destino_id AND ID_Moneda = p_id_moneda_destino LIMIT 1;
 
-    SELECT ID INTO v_saldo_bob_destino_id
-    FROM   saldo_moneda
-    WHERE  ID_Cuenta = v_cuenta_destino_id AND ID_Moneda = v_id_bob LIMIT 1;
-
     IF p_id_moneda_origen = v_id_bob THEN
         SET v_monto_bob = p_monto_origen;
     ELSE
         SET v_monto_bob = p_monto_origen * p_tasa_origen_bob;
-    END IF;
-
-    IF p_id_moneda_destino = v_id_bob THEN
-        SET v_monto_bob_destino = p_monto_destino;
-    ELSE
-        SET v_monto_bob_destino = p_monto_destino * p_tasa_destino_bob;
     END IF;
 
     IF v_cuenta_origen_id IS NULL THEN
@@ -923,34 +903,18 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia_multimone
         SET p_transaccion_id = -1;
         SET p_mensaje = CONCAT('Error: Saldo insuficiente en ', v_codigo_origen,
                                '. Disponible: ', IFNULL(v_saldo_mon_origen, 0));
-    ELSEIF v_hay_conversion = 1
-        AND p_id_moneda_origen != v_id_bob
-        AND (v_saldo_bob_origen_id IS NULL OR v_saldo_origen_bob < v_monto_bob) THEN
-        SET p_transaccion_id = -1;
-        SET p_mensaje = 'Error: Saldo BOB insuficiente en la cuenta origen.';
     ELSE
         START TRANSACTION;
 
+        -- ✅ FIX: Descuenta SOLO la moneda origen (no toca BOB en paralelo)
         UPDATE saldo_moneda SET Saldo = Saldo - p_monto_origen WHERE ID = v_saldo_mon_origen_id;
 
-        IF v_hay_conversion = 1 AND p_id_moneda_origen != v_id_bob THEN
-            UPDATE saldo_moneda SET Saldo = Saldo - v_monto_bob WHERE ID = v_saldo_bob_origen_id;
-        END IF;
-
+        -- ✅ FIX: Acredita SOLO la moneda destino (no toca BOB en paralelo)
         IF v_saldo_mon_destino_id IS NULL THEN
             INSERT INTO saldo_moneda (ID_Cuenta, ID_Moneda, Saldo)
             VALUES (v_cuenta_destino_id, p_id_moneda_destino, p_monto_destino);
         ELSE
             UPDATE saldo_moneda SET Saldo = Saldo + p_monto_destino WHERE ID = v_saldo_mon_destino_id;
-        END IF;
-
-        IF v_hay_conversion = 1 AND p_id_moneda_destino != v_id_bob THEN
-            IF v_saldo_bob_destino_id IS NULL THEN
-                INSERT INTO saldo_moneda (ID_Cuenta, ID_Moneda, Saldo)
-                VALUES (v_cuenta_destino_id, v_id_bob, v_monto_bob_destino);
-            ELSE
-                UPDATE saldo_moneda SET Saldo = Saldo + v_monto_bob_destino WHERE ID = v_saldo_bob_destino_id;
-            END IF;
         END IF;
 
         INSERT INTO Transacciones (
@@ -959,7 +923,6 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia_multimone
             Monto_original,  Moneda_origen,
             Monto_destino,   Moneda_destino,
             Saldo_anterior,  Saldo_posterior,
-            -- Saldo en la moneda real de origen antes y después
             Saldo_anterior_original,           Saldo_posterior_original,
             Metodo_transaccion, Estado, Descripcion
         ) VALUES (
@@ -969,7 +932,6 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia_multimone
             p_monto_destino, v_codigo_destino,
             IFNULL(v_saldo_origen_bob, v_saldo_mon_origen),
             IFNULL(v_saldo_origen_bob, v_saldo_mon_origen) - v_monto_bob,
-            -- Saldo en moneda real de origen antes/después
             v_saldo_mon_origen,
             v_saldo_mon_origen - p_monto_origen,
             p_metodo, 'exitosa',
@@ -983,12 +945,8 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_realizar_transferencia_multimone
             'Transferencia exitosa. ',
             p_monto_origen, ' ', v_codigo_origen,
             ' → ', p_monto_destino, ' ', v_codigo_destino,
-            IF(v_hay_conversion = 1,
-               CONCAT(' | Nuevo saldo BOB origen: ',
-                      ROUND(IFNULL(v_saldo_origen_bob, 0) - v_monto_bob, 2)),
-               CONCAT(' | Nuevo saldo ', v_codigo_origen, ': ',
-                      ROUND(v_saldo_mon_origen - p_monto_origen, 6))
-            )
+            ' | Nuevo saldo ', v_codigo_origen, ': ',
+            ROUND(v_saldo_mon_origen - p_monto_origen, 6)
         );
     END IF;
 END$$
@@ -1334,12 +1292,12 @@ INSERT INTO `saldo_moneda` (`ID`, `ID_Cuenta`, `ID_Moneda`, `Saldo`, `Fecha_crea
 (3, 7, 1, 0.00, '2026-03-14 18:22:57', '2026-03-14 21:05:09'),
 (4, 8, 1, 0.00, '2026-03-14 18:22:57', '2026-03-14 21:05:09'),
 (12, 6, 2, 13.00, '2026-03-15 09:43:29', '2026-03-15 09:43:29'),
-(16, 12, 1, 947.26, '2026-04-17 16:17:22', '2026-04-23 21:05:07'),
-(18, 14, 1, 9647.08, '2026-04-17 16:41:56', '2026-04-23 21:05:07'),
-(19, 12, 2, 54.74, '2026-04-18 14:39:11', '2026-04-18 20:35:55'),
+(16, 12, 1, 1247.26, '2026-04-17 16:17:22', '2026-04-23 21:18:26'),
+(18, 14, 1, 9726.42, '2026-04-17 16:41:56', '2026-04-23 22:49:22'),
+(19, 12, 2, 69.11, '2026-04-18 14:39:11', '2026-04-23 21:18:26'),
 (20, 15, 1, 0.00, '2026-04-18 14:47:32', '2026-04-18 14:47:32'),
-(21, 14, 7, 5359.20, '2026-04-18 20:59:56', '2026-04-18 20:59:56'),
-(22, 14, 2, 7.90, '2026-04-23 20:02:47', '2026-04-23 21:02:19');
+(21, 14, 7, 5319.20, '2026-04-18 20:59:56', '2026-04-24 00:09:55'),
+(22, 14, 2, 17.85, '2026-04-23 20:02:47', '2026-04-23 23:01:09');
 
 -- --------------------------------------------------------
 
@@ -1536,10 +1494,10 @@ CREATE TABLE `tasa_cambio_cache` (
 --
 
 INSERT INTO `tasa_cambio_cache` (`ID`, `Moneda_origen`, `Moneda_destino`, `Tasa`, `Tipo_tasa`, `Fecha_actualizacion`) VALUES
-(1, 'BOB', 'USD', 0.14, 'oficial', '2026-04-23 21:02:19'),
-(2, 'USD', 'BOB', 6.96, 'oficial', '2026-04-23 21:02:19'),
-(3, 'BOB', 'USD', 0.10, 'binance', '2026-04-23 21:02:19'),
-(4, 'USD', 'BOB', 9.66, 'binance', '2026-04-23 21:02:19');
+(1, 'BOB', 'USD', 0.14, 'oficial', '2026-04-24 00:09:55'),
+(2, 'USD', 'BOB', 6.96, 'oficial', '2026-04-24 00:09:55'),
+(3, 'BOB', 'USD', 0.10, 'binance', '2026-04-24 00:09:55'),
+(4, 'USD', 'BOB', 9.66, 'binance', '2026-04-24 00:09:55');
 
 -- --------------------------------------------------------
 
@@ -1711,7 +1669,22 @@ INSERT INTO `transacciones` (`ID`, `ID_Cuenta_Transfiere`, `ID_Cuenta_Transferid
 (127, 14, NULL, 1, 9.66, 1.000000, 'USD', NULL, NULL, 9257.74, 9257.740000, 9248.08, 9248.080000, 'ATM', 'exitosa', 'Retiro', '2026-04-23 20:46:39', '2026-04-23 20:46:39', '2026-04-23 20:50:50'),
 (128, 14, NULL, 2, 500.00, 500.000000, 'BOB', 500.000000, 'BOB', 9248.08, 9248.080000, 9748.08, 9748.080000, 'ATM', 'exitosa', 'Deposito', '2026-04-23 21:02:12', '2026-04-23 21:02:12', '2026-04-23 21:02:12'),
 (129, 14, NULL, 1, 1.00, 0.103520, 'USD', NULL, NULL, 9748.08, 8.000000, 9747.08, 7.896480, 'ATM', 'exitosa', 'Retiro', '2026-04-23 21:02:19', '2026-04-23 21:02:19', '2026-04-23 21:02:19'),
-(130, 14, 12, 3, 100.00, 100.000000, 'BOB', 100.000000, 'BOB', 9747.08, 9747.080000, 9647.08, 9647.080000, 'ATM', 'exitosa', 'jajajja', '2026-04-23 21:05:07', '2026-04-23 21:05:07', '2026-04-23 21:05:07');
+(130, 14, 12, 3, 100.00, 100.000000, 'BOB', 100.000000, 'BOB', 9747.08, 9747.080000, 9647.08, 9647.080000, 'ATM', 'exitosa', 'jajajja', '2026-04-23 21:05:07', '2026-04-23 21:05:07', '2026-04-23 21:05:07'),
+(131, 14, 12, 3, 200.00, 200.000000, 'BOB', 200.000000, 'BOB', 9647.08, 9647.080000, 9447.08, 9447.080000, 'ATM', 'exitosa', 'Pago de deuda', '2026-04-23 21:17:45', '2026-04-23 21:17:45', '2026-04-23 21:17:45'),
+(132, 14, 12, 3, 100.00, 100.000000, 'BOB', 14.367816, 'USD', 9447.08, 9447.080000, 9347.08, 9347.080000, 'web', 'exitosa', 'Transferencia internacional', '2026-04-23 21:18:26', '2026-04-23 21:18:26', '2026-04-23 21:18:26'),
+(133, 14, NULL, 2, 100.00, 100.000000, 'BOB', 10.351967, 'USD', 9347.08, 7.900000, 9447.08, 18.251967, 'web', 'exitosa', 'Deposito', '2026-04-23 21:20:12', '2026-04-23 21:20:12', '2026-04-23 21:20:12'),
+(134, 14, NULL, 2, 100.00, 100.000000, 'BOB', 10.351967, 'USD', 9447.08, 18.250000, 9547.08, 28.601967, 'web', 'exitosa', 'Deposito', '2026-04-23 21:54:40', '2026-04-23 21:54:40', '2026-04-23 21:54:40'),
+(135, 14, NULL, 2, 100.00, 100.000000, 'BOB', 10.351967, 'USD', 9547.08, 28.600000, 9647.08, 38.951967, 'web', 'exitosa', 'Deposito', '2026-04-23 21:55:38', '2026-04-23 21:55:38', '2026-04-23 21:55:38'),
+(136, 14, NULL, 1, 1.00, 0.103520, 'USD', NULL, NULL, 9647.08, 38.950000, 9646.08, 38.846480, 'ATM', 'exitosa', 'Retiro', '2026-04-23 22:23:57', '2026-04-23 22:23:57', '2026-04-23 22:23:57'),
+(137, 14, NULL, 1, 9.66, 1.000000, 'USD', NULL, NULL, 9646.08, 38.850000, 9636.42, 37.850000, 'ATM', 'exitosa', 'Retiro', '2026-04-23 22:24:47', '2026-04-23 22:24:47', '2026-04-23 22:24:47'),
+(138, 14, NULL, 1, 96.60, 10.000000, 'USD', NULL, NULL, 9636.42, 37.850000, 9539.82, 27.850000, 'ATM', 'exitosa', 'Retiro', '2026-04-23 22:33:25', '2026-04-23 22:33:25', '2026-04-23 22:33:25'),
+(139, 14, NULL, 1, 10.00, 10.000000, 'BOB', NULL, NULL, 9636.42, 9636.420000, 9626.42, 9626.420000, 'ATM', 'exitosa', 'Retiro', '2026-04-23 22:46:09', '2026-04-23 22:46:09', '2026-04-23 22:46:09'),
+(140, 14, NULL, 1, 25.90, 10.000000, 'PEN', NULL, NULL, 9626.42, 5359.200000, 9600.52, 5349.200000, 'ATM', 'exitosa', 'Retiro', '2026-04-23 22:47:25', '2026-04-23 22:47:25', '2026-04-23 22:47:25'),
+(141, 14, NULL, 2, 100.00, 100.000000, 'BOB', 100.000000, 'BOB', 9626.42, 9626.420000, 9726.42, 9726.420000, 'ATM', 'exitosa', 'Deposito', '2026-04-23 22:49:22', '2026-04-23 22:49:22', '2026-04-23 22:49:22'),
+(142, 14, NULL, 1, 96.60, 10.000000, 'USD', NULL, NULL, 9726.42, 27.850000, 9629.82, 17.850000, 'ATM', 'exitosa', 'Retiro', '2026-04-23 23:01:09', '2026-04-23 23:01:09', '2026-04-23 23:01:09'),
+(143, 14, NULL, 1, 25.90, 10.000000, 'PEN', NULL, NULL, 9726.42, 5349.200000, 9700.52, 5339.200000, 'ATM', 'exitosa', 'Retiro', '2026-04-23 23:08:50', '2026-04-23 23:08:50', '2026-04-23 23:08:50'),
+(144, 14, NULL, 1, 25.90, 10.000000, 'PEN', NULL, NULL, 9726.42, 5339.200000, 9700.52, 5329.200000, 'ATM', 'exitosa', 'Retiro', '2026-04-23 23:44:35', '2026-04-23 23:44:35', '2026-04-23 23:44:35'),
+(145, 14, NULL, 1, 25.90, 10.000000, 'PEN', NULL, NULL, 9726.42, 5329.200000, 9700.52, 5319.200000, 'ATM', 'exitosa', 'Retiro', '2026-04-24 00:09:55', '2026-04-24 00:09:55', '2026-04-24 00:09:55');
 
 -- --------------------------------------------------------
 
@@ -2061,7 +2034,7 @@ ALTER TABLE `tasa_cambio`
 -- AUTO_INCREMENT de la tabla `tasa_cambio_cache`
 --
 ALTER TABLE `tasa_cambio_cache`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=138;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=166;
 
 --
 -- AUTO_INCREMENT de la tabla `tipo_transaccion`
@@ -2073,7 +2046,7 @@ ALTER TABLE `tipo_transaccion`
 -- AUTO_INCREMENT de la tabla `transacciones`
 --
 ALTER TABLE `transacciones`
-  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=131;
+  MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=146;
 
 --
 -- AUTO_INCREMENT de la tabla `users`

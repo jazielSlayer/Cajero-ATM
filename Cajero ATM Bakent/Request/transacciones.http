@@ -41,9 +41,9 @@ Content-Type: application/json
 {
   "numero_tarjeta": "4851617793844965",
   "pin": "5903",
-  "monto": 1,
-  "moneda": "BOB",
-  "moneda_salida": "USD",
+  "monto": 10,
+  "moneda": "PEN",
+  "moneda_salida": "PEN",
   "tipo_tasa": "binance",
   "metodo": "ATM",
   "confirmar_conversion": true
@@ -130,7 +130,7 @@ Content-Type: application/json
   "tipo_tasa": "oficial",
   "metodo": "web",
   "descripcion": "Transferencia internacional",
-  "confirmar_conversion": false
+  "confirmar_conversion": true
 }
 
 ### ─── TRANSFERENCIA multimoneda BOB → USD (paso 2: confirmar) ──

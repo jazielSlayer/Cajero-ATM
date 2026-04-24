@@ -12,6 +12,40 @@ import { enviarCodigoVerificacion, enviarDatosRegistro } from "./verificacion_em
 const SALT_ROUNDS = 10;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// HELPER — misma lógica que actividad.js
+// Si la transacción fue en moneda extranjera, usa los campos _original
+// para que el frontend vea el saldo en la moneda real de la operación.
+// ─────────────────────────────────────────────────────────────────────────────
+function normalizarSaldos(t) {
+    const esMonedaExtranjera = t.Moneda_origen && t.Moneda_origen !== "BOB";
+
+    return {
+        ...t,
+        // Monto que se muestra: en la moneda real de la operación
+        Monto: esMonedaExtranjera
+            ? parseFloat(t.Monto_original ?? t.Monto)
+            : parseFloat(t.Monto),
+
+        // Saldo antes/después en la moneda de la operación
+        Saldo_anterior: esMonedaExtranjera
+            ? t.Saldo_anterior_original
+            : t.Saldo_anterior,
+
+        Saldo_posterior: esMonedaExtranjera
+            ? t.Saldo_posterior_original
+            : t.Saldo_posterior,
+
+        // Guardamos los valores BOB por si el frontend los necesita
+        Saldo_anterior_BOB:  t.Saldo_anterior,
+        Saldo_posterior_BOB: t.Saldo_posterior,
+        Monto_BOB:           parseFloat(t.Monto),
+
+        // Indicador de moneda real para el frontend
+        moneda_saldo: esMonedaExtranjera ? t.Moneda_origen : "BOB",
+    };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PASO 1 – Solicitar código de verificación
 // ─────────────────────────────────────────────────────────────────────────────
 export const solicitarVerificacion = async (req, res) => {
@@ -21,7 +55,6 @@ export const solicitarVerificacion = async (req, res) => {
         return res.status(400).json({ error: "El campo correo es requerido." });
     }
 
-    // Verificar que el correo no esté ya registrado
     const connection = await connect();
     const [[existente]] = await connection.query(
         "SELECT ID FROM Users WHERE Correo = ? LIMIT 1",
@@ -65,7 +98,7 @@ export const confirmarCodigo = (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PASO 3 – Crear usuario (solo si el correo fue verificado)
+// PASO 3 – Crear usuario
 // ─────────────────────────────────────────────────────────────────────────────
 function generarPin() {
     return Math.floor(1000 + Math.random() * 9000).toString();
@@ -93,7 +126,6 @@ export const createUser = async (req, res) => {
         tipo_tarjeta, tipo_cuenta,
     } = req.body;
 
-    // ── Verificar que el correo haya pasado por el flujo de verificación ─────
     if (!correoEstaVerificado(correo)) {
         return res.status(403).json({
             error: "El correo no ha sido verificado. Completa el proceso de verificación antes de registrarte.",
@@ -137,7 +169,6 @@ export const createUser = async (req, res) => {
             return res.status(400).json({ error: output.mensaje });
         }
 
-        // ── Registro exitoso: limpiar verificación y enviar datos por correo ─
         limpiarVerificacion(correo);
 
         try {
@@ -145,11 +176,10 @@ export const createUser = async (req, res) => {
                 nombre,
                 numero_cuenta,
                 numero_tarjeta,
-                pin,               // PIN en claro, solo en este correo
+                pin,
                 fecha_vencimiento,
             });
         } catch (mailErr) {
-            // El usuario fue creado; el error de correo es no crítico
             console.error("Advertencia: usuario creado pero falló el envío del correo con datos:", mailErr);
         }
 
@@ -164,27 +194,87 @@ export const createUser = async (req, res) => {
     }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DatosUsuario — ✅ CORREGIDO: usa query directa en vez del SP para tener
+// acceso a todos los campos multi-moneda, luego aplica normalizarSaldos.
+// ─────────────────────────────────────────────────────────────────────────────
 export const DatosUsuario = async (req, res) => {
     const connection = await connect();
     const { nombre_completo } = req.body;
 
     try {
-        const [rows] = await connection.query(
-            'CALL sp_datos_usuario_por_nombre(?)',
+        // ── 1. Datos del usuario + cuenta + tarjeta ───────────────────────────
+        const [[datosUsuario]] = await connection.query(
+            `SELECT
+                vuc.usuario_id,
+                vuc.Correo,
+                vuc.Nombre,
+                vuc.Apellido,
+                vuc.nombre_completo,
+                vuc.Direccion,
+                vuc.Telefono,
+                vuc.Edad,
+                vcr.Numero_cuenta,
+                vcr.saldo_bob          AS Saldo,
+                vcr.estado_cuenta,
+                vcr.Numero_tarjeta,
+                tar.Pin,
+                vcr.Tipo_tarjeta,
+                vcr.Fecha_vencimiento
+             FROM vista_usuarios_completo vuc
+             INNER JOIN vista_cuentas_resumen vcr ON vcr.usuario_id = vuc.usuario_id
+             INNER JOIN Tarjeta tar ON tar.Numero_tarjeta = vcr.Numero_tarjeta
+             WHERE vuc.nombre_completo = ?
+             LIMIT 1`,
             [nombre_completo]
         );
 
-        const datosUsuario  = rows[0]?.[0];
-        const transacciones = rows[1] ?? [];
-
         if (!datosUsuario) {
-            return res.status(404).json({ error: 'Usuario no encontrado' });
+            return res.status(404).json({ error: "Usuario no encontrado" });
         }
 
-        const depositos          = transacciones.filter(t => t.tipo_transaccion === 'Deposito');
-        const otrasTransacciones = transacciones.filter(t => t.tipo_transaccion !== 'Deposito');
-        const retiros          = transacciones.filter(t => t.tipo_transaccion === 'Retiro');
-        const transferencias          = transacciones.filter(t => t.tipo_transaccion === 'Transferencia');
+        // ── 2. Transacciones CON todos los campos multi-moneda ────────────────
+        // ✅ FIX: A diferencia del SP original, aquí seleccionamos explícitamente
+        //    Moneda_origen, Monto_original, Saldo_anterior_original y
+        //    Saldo_posterior_original para poder aplicar normalizarSaldos.
+        const [transaccionesRaw] = await connection.query(
+            `SELECT
+                vtc.transaccion_id,
+                vtc.ID_Tipo_Transaccion,
+                vtc.tipo_transaccion,
+                vtc.Fecha_transaccion,
+                vtc.Monto,
+                vtc.Monto_original,
+                vtc.Moneda_origen,
+                vtc.Monto_destino,
+                vtc.Moneda_destino,
+                vtc.Saldo_anterior,
+                vtc.Saldo_posterior,
+                vtc.Saldo_anterior_original,
+                vtc.Saldo_posterior_original,
+                vtc.Metodo_transaccion,
+                vtc.estado_transaccion,
+                vtc.Descripcion,
+                vtc.cuenta_origen,
+                vtc.cuenta_destino,
+                vtc.nombre_destinatario,
+                vtc.correo_destinatario,
+                vtc.nombre_remitente
+             FROM vista_transacciones_completo vtc
+             INNER JOIN vista_usuarios_completo vuc ON vtc.usuario_id = vuc.usuario_id
+             WHERE vuc.nombre_completo = ?
+             ORDER BY vtc.Fecha_transaccion DESC`,
+            [nombre_completo]
+        );
+
+        // ── 3. Aplicar normalización de moneda (igual que actividad.js) ───────
+        const transacciones = transaccionesRaw.map(normalizarSaldos);
+
+        // ── 4. Separar por tipo ───────────────────────────────────────────────
+        const depositos      = transacciones.filter(t => t.tipo_transaccion === "Deposito");
+        const retiros        = transacciones.filter(t => t.tipo_transaccion === "Retiro");
+        const transferencias = transacciones.filter(t => t.tipo_transaccion === "Transferencia");
+        const otrasTransacciones = transacciones.filter(t => t.tipo_transaccion !== "Deposito");
 
         return res.json({
             usuario: {
@@ -203,41 +293,39 @@ export const DatosUsuario = async (req, res) => {
                 },
                 tarjeta: {
                     numero_tarjeta:    datosUsuario.Numero_tarjeta,
-                    pin:               datosUsuario.Pin,   // hash bcrypt
+                    pin:               datosUsuario.Pin,
                     tipo_tarjeta:      datosUsuario.Tipo_tarjeta,
                     fecha_vencimiento: datosUsuario.Fecha_vencimiento,
                 },
             },
             transacciones: otrasTransacciones,
-            depositos,retiros, transferencias
+            depositos,
+            retiros,
+            transferencias,
         });
 
     } catch (err) {
-        console.error('Error en DatosUsuario:', err);
-        return res.status(500).json({ error: 'Error interno al obtener datos del usuario' });
+        console.error("Error en DatosUsuario:", err);
+        return res.status(500).json({ error: "Error interno al obtener datos del usuario" });
     }
 };
 
 export const getUsuariosCompleto = async (req, res) => {
     const db = await connect();
-    const [rows] = await db.query('SELECT * FROM vista_usuarios_completo');
+    const [rows] = await db.query("SELECT * FROM vista_usuarios_completo");
     res.json(rows);
 };
 
-
-
 export const consultarSaldosUsuario = async (req, res) => {
-    // El nombre completo viene como parámetro de ruta, puede tener espacios (URL-encoded)
     const nombre_completo = decodeURIComponent(req.params.nombre_completo ?? "").trim();
- 
+
     if (!nombre_completo) {
         return res.status(400).json({ error: "El parámetro nombre_completo es requerido." });
     }
- 
+
     const connection = await connect();
- 
+
     try {
-        // ── 1. Buscar usuario y cuenta por nombre completo ────────────────────
         const [[usuario]] = await connection.query(
             `SELECT
                 vuc.usuario_id,
@@ -256,14 +344,13 @@ export const consultarSaldosUsuario = async (req, res) => {
              LIMIT 1`,
             [nombre_completo]
         );
- 
+
         if (!usuario) {
             return res.status(404).json({
                 error: `No se encontró un usuario activo con nombre: "${nombre_completo}".`,
             });
         }
- 
-        // ── 2. Obtener todos los saldos del usuario (una fila por moneda) ─────
+
         const [saldos] = await connection.query(
             `SELECT
                 m.Codigo              AS moneda,
@@ -277,12 +364,10 @@ export const consultarSaldosUsuario = async (req, res) => {
              ORDER BY sm.Saldo DESC`,
             [usuario.cuenta_id]
         );
- 
-        // ── 3. Saldo total expresado en BOB (solo el registro BOB directo) ────
+
         const saldoBOB = saldos.find((s) => s.moneda === "BOB");
         const saldo_total_bob = saldoBOB ? parseFloat(saldoBOB.saldo) : 0;
- 
-        // ── 4. Respuesta ──────────────────────────────────────────────────────
+
         return res.json({
             usuario: {
                 nombre_completo: usuario.nombre_completo,
@@ -299,15 +384,9 @@ export const consultarSaldosUsuario = async (req, res) => {
             })),
             saldo_total_bob,
         });
- 
+
     } catch (err) {
         console.error("Error al consultar saldos:", err);
         return res.status(500).json({ error: "Error interno al consultar saldos." });
     }
 };
- 
-
-
-
-
-

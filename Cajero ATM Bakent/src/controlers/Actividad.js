@@ -63,8 +63,6 @@ function agruparPorMes(transacciones) {
             meses[clave] = { mes: clave, depositos: 0, retiros: 0, transferencias: 0 };
         }
         const tipo = (t.tipo_transaccion || "").toLowerCase();
-        // Siempre usamos Monto_original + Moneda_origen para los gráficos
-        // Si no existe (filas históricas), cae en Monto (BOB)
         const monto = parseFloat(t.Monto_original ?? t.Monto);
         if      (tipo === "deposito")       meses[clave].depositos       += monto;
         else if (tipo === "retiro")         meses[clave].retiros         += monto;
@@ -79,7 +77,6 @@ function calcularResumen(transacciones) {
 
     transacciones.forEach((t) => {
         const tipo  = (t.tipo_transaccion || "Otro").toLowerCase();
-        // Preferir Monto_original; si es null (historial), usar Monto (BOB)
         const monto = parseFloat(t.Monto_original ?? t.Monto);
         porTipo[tipo] = (porTipo[tipo] || 0) + monto;
         if      (tipo === "deposito")      totalDepositos      += monto;
@@ -100,6 +97,33 @@ function calcularResumen(transacciones) {
                 (t) => (t.tipo_transaccion || "").toLowerCase() === tipo
             ).length,
         })),
+    };
+}
+
+// ✅ FIX: Elige el saldo correcto según la moneda de la transacción.
+// Si la operación fue en una moneda distinta a BOB, usa Saldo_anterior_original
+// (que contiene el saldo en la moneda real). Si fue en BOB, usa Saldo_anterior.
+function normalizarSaldos(t) {
+    const esMonedaExtranjera =
+        t.Moneda_origen && t.Moneda_origen !== "BOB";
+
+    return {
+        ...t,
+        // Saldo de referencia para mostrar al usuario: en la moneda de la operación
+        Saldo_anterior: esMonedaExtranjera
+            ? t.Saldo_anterior_original   // ej: 37.85 USD
+            : t.Saldo_anterior,           // ej: 9636.42 BOB
+
+        Saldo_posterior: esMonedaExtranjera
+            ? t.Saldo_posterior_original  // ej: 27.85 USD
+            : t.Saldo_posterior,          // ej: 9539.82 BOB
+
+        // Conservamos también los valores en BOB por si el frontend los necesita
+        Saldo_anterior_BOB:  t.Saldo_anterior,
+        Saldo_posterior_BOB: t.Saldo_posterior,
+
+        // Indicador útil para el frontend
+        moneda_saldo: esMonedaExtranjera ? t.Moneda_origen : "BOB",
     };
 }
 
@@ -182,7 +206,7 @@ export const getActividadCompleta = async (req, res) => {
         );
 
         // ── 5. Transacciones filtradas ────────────────────────────────────────
-        //  Ahora incluimos Monto_original, Moneda_origen, Monto_destino, Moneda_destino
+        // ✅ FIX: se agregan Saldo_anterior_original y Saldo_posterior_original
         let sql = `
             SELECT
                 vtc.transaccion_id,
@@ -195,6 +219,8 @@ export const getActividadCompleta = async (req, res) => {
                 vtc.Moneda_destino,
                 vtc.Saldo_anterior,
                 vtc.Saldo_posterior,
+                vtc.Saldo_anterior_original,
+                vtc.Saldo_posterior_original,
                 vtc.Metodo_transaccion,
                 vtc.estado_transaccion,
                 vtc.Descripcion,
@@ -234,10 +260,12 @@ export const getActividadCompleta = async (req, res) => {
 
         sql += " ORDER BY vtc.Fecha_transaccion DESC";
 
-        const [transacciones] = await connection.query(sql, params);
+        const [transaccionesRaw] = await connection.query(sql, params);
+
+        // ✅ FIX: normalizar saldos según la moneda de cada transacción
+        const transacciones = transaccionesRaw.map(normalizarSaldos);
 
         // ── 6. Todas las transacciones (para gráficos / resumen) ─────────────
-        //  También pedimos Monto_original y Moneda_origen aquí
         const [todasTransacciones] = await connection.query(
             `SELECT
                 vtc.Monto,
@@ -304,25 +332,29 @@ export const exportarTransaccionesCSV = async (req, res) => {
         );
         if (!usuario) return res.status(404).json({ error: "Usuario no encontrado." });
 
-        // Incluimos Monto_original y Moneda_origen en el CSV
+        // ✅ FIX: incluir columnas originales en el CSV
         let sql = `
             SELECT
-                vtc.transaccion_id       AS ID,
-                vtc.Fecha_transaccion    AS Fecha,
-                vtc.tipo_transaccion     AS Tipo,
-                vtc.Monto_original       AS Monto_original,
-                vtc.Moneda_origen        AS Moneda,
-                vtc.Monto                AS Monto_BOB,
-                vtc.Monto_destino        AS Monto_acreditado,
-                vtc.Moneda_destino       AS Moneda_destino,
-                vtc.Saldo_anterior,
-                vtc.Saldo_posterior,
-                vtc.Metodo_transaccion   AS Metodo,
-                vtc.estado_transaccion   AS Estado,
+                vtc.transaccion_id           AS ID,
+                vtc.Fecha_transaccion        AS Fecha,
+                vtc.tipo_transaccion         AS Tipo,
+                vtc.Monto_original           AS Monto_original,
+                vtc.Moneda_origen            AS Moneda,
+                vtc.Monto                    AS Monto_BOB,
+                vtc.Monto_destino            AS Monto_acreditado,
+                vtc.Moneda_destino           AS Moneda_destino,
+                -- ✅ Saldos en la moneda real de la transacción
+                vtc.Saldo_anterior_original  AS Saldo_anterior,
+                vtc.Saldo_posterior_original AS Saldo_posterior,
+                -- Saldos en BOB como referencia adicional
+                vtc.Saldo_anterior           AS Saldo_anterior_BOB,
+                vtc.Saldo_posterior          AS Saldo_posterior_BOB,
+                vtc.Metodo_transaccion       AS Metodo,
+                vtc.estado_transaccion       AS Estado,
                 vtc.Descripcion,
-                vtc.cuenta_origen        AS Cuenta_Origen,
-                vtc.cuenta_destino       AS Cuenta_Destino,
-                vtc.nombre_destinatario  AS Destinatario
+                vtc.cuenta_origen            AS Cuenta_Origen,
+                vtc.cuenta_destino           AS Cuenta_Destino,
+                vtc.nombre_destinatario      AS Destinatario
             FROM vista_transacciones_completo vtc
             WHERE vtc.usuario_id = ?
         `;
