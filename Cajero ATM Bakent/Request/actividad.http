@@ -15,7 +15,7 @@ POST {{base}}/actividad/completa
 Content-Type: application/json
 
 {
-  "nombre_completo": "Rafael Ignacio Lovera Arancivia"
+  "nombre_completo": "Jaziel Armando Vargas Choque"
 }
 
 ###

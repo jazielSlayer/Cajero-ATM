@@ -1,6 +1,8 @@
 @api = http://localhost:3700
 
-### ─── RETIRO ───────────────────────────────────────────────
+### ─── RETIRO directo en USD (tiene saldo USD) ───────────────
+# Retira 1 USD directamente desde saldo en USD.
+# confirmar_conversion no aplica aquí (hay saldo directo).
 POST {{api}}/retiro
 Content-Type: application/json
 
@@ -11,11 +13,11 @@ Content-Type: application/json
   "moneda": "USD",
   "moneda_salida": "USD",
   "tipo_tasa": "binance",
-  "metodo": "ATM",
-  "confirmar_conversion": true
+  "metodo": "ATM"
 }
 
-### ─── RETIRO CON CONVERSIÓN (confirmar) ────────────────────
+### ─── RETIRO BOB directo ────────────────────────────────────
+# Retira 500 BOB directamente desde saldo en BOB.
 POST {{api}}/retiro
 Content-Type: application/json
 
@@ -24,13 +26,31 @@ Content-Type: application/json
   "pin": "5903",
   "monto": 500,
   "moneda": "BOB",
+  "moneda_salida": "BOB",
   "tipo_tasa": "oficial",
-  "metodo": "ATM",
-  "confirmar_conversion": true,
-  "moneda_salida": "BOB"
+  "metodo": "ATM"
 }
 
-### ─── DEPÓSITO ──────────────────────────────────────────────
+### ─── RETIRO con conversión (BOB → USD, confirmar) ─────────
+# No tiene saldo en USD → descuenta BOB equivalentes.
+# Paso 1: enviar sin confirmar_conversion para ver cuánto BOB se usará.
+# Paso 2: reenviar con confirmar_conversion: true para ejecutar.
+POST {{api}}/retiro
+Content-Type: application/json
+
+{
+  "numero_tarjeta": "4851617793844965",
+  "pin": "5903",
+  "monto": 1,
+  "moneda": "BOB",
+  "moneda_salida": "USD",
+  "tipo_tasa": "binance",
+  "metodo": "ATM",
+  "confirmar_conversion": true
+}
+
+### ─── DEPÓSITO directo BOB ──────────────────────────────────
+# Deposita 500 BOB → acredita 500 BOB. Sin conversión.
 POST {{api}}/deposito
 Content-Type: application/json
 
@@ -46,7 +66,8 @@ Content-Type: application/json
   "metodo": "ATM"
 }
 
-### ─── DEPÓSITO MULTIMONEDA (USD → BOB) ─────────────────────
+### ─── DEPÓSITO multimoneda USD → BOB ───────────────────────
+# Deposita 100 USD → acredita el equivalente en BOB según tasa binance.
 POST {{api}}/deposito
 Content-Type: application/json
 
@@ -62,7 +83,25 @@ Content-Type: application/json
   "metodo": "web"
 }
 
-### ─── TRANSFERENCIA ─────────────────────────────────────────
+### ─── DEPÓSITO multimoneda BOB → USD ───────────────────────
+# Deposita 100 BOB → acredita el equivalente en USD según tasa binance.
+POST {{api}}/deposito
+Content-Type: application/json
+
+{
+  "correo": "jazielarmandovargaschoque@gmail.com",
+  "numero_tarjeta": "4851617793844965",
+  "contrasena": "DrXeno79TESLA",
+  "pin": "5903",
+  "monto": 100,
+  "moneda_origen": "BOB",
+  "moneda_destino": "USD",
+  "tipo_tasa": "binance",
+  "metodo": "web"
+}
+
+### ─── TRANSFERENCIA directa BOB → BOB ──────────────────────
+# Transfiere 200 BOB sin conversión.
 POST {{api}}/transferencia
 Content-Type: application/json
 
@@ -74,11 +113,11 @@ Content-Type: application/json
   "moneda_destino": "BOB",
   "tipo_tasa": "oficial",
   "metodo": "ATM",
-  "descripcion": "Pago de deuda",
-  "confirmar_conversion": true
+  "descripcion": "Pago de deuda"
 }
 
-### ─── TRANSFERENCIA MULTIMONEDA (BOB → USD) ────────────────
+### ─── TRANSFERENCIA multimoneda BOB → USD (paso 1: consultar) ──
+# Devuelve 202 con el detalle de conversión. No ejecuta aún.
 POST {{api}}/transferencia
 Content-Type: application/json
 
@@ -94,7 +133,25 @@ Content-Type: application/json
   "confirmar_conversion": false
 }
 
-### ─── TRANSFERENCIA CON CONVERSIÓN (confirmar) ─────────────
+### ─── TRANSFERENCIA multimoneda BOB → USD (paso 2: confirmar) ──
+# Mismo request anterior pero con confirmar_conversion: true para ejecutar.
+POST {{api}}/transferencia
+Content-Type: application/json
+
+{
+  "numero_de_cuenta": "5851617743407592",
+  "numero_cuenta_destino": "5704213255142001",
+  "monto": 100,
+  "moneda_origen": "BOB",
+  "moneda_destino": "USD",
+  "tipo_tasa": "oficial",
+  "metodo": "web",
+  "descripcion": "Transferencia internacional",
+  "confirmar_conversion": true
+}
+
+### ─── TRANSFERENCIA directa USD → USD ──────────────────────
+# Transfiere 13 USD sin conversión (ambas cuentas en USD).
 POST {{api}}/transferencia
 Content-Type: application/json
 
@@ -106,8 +163,7 @@ Content-Type: application/json
   "moneda_destino": "USD",
   "tipo_tasa": "binance",
   "metodo": "ATM",
-  "descripcion": "Conversión confirmada",
-  "confirmar_conversion": true
+  "descripcion": "Pago en dólares"
 }
 
 ### ─── TRANSACCIONES USUARIO (todas) ────────────────────────
@@ -118,7 +174,7 @@ Content-Type: application/json
   "nombre_completo": "Jaziel Armando Vargas Choque"
 }
 
-### ─── TRANSACCIONES USUARIO (filtradas por tipo) ───────────
+### ─── TRANSACCIONES USUARIO (solo retiros) ─────────────────
 POST {{api}}/transacciones/usuario
 Content-Type: application/json
 
@@ -127,8 +183,26 @@ Content-Type: application/json
   "tipo_transaccion": "Retiro"
 }
 
+### ─── TRANSACCIONES USUARIO (solo depósitos) ───────────────
+POST {{api}}/transacciones/usuario
+Content-Type: application/json
+
+{
+  "nombre_completo": "Jaziel Armando Vargas Choque",
+  "tipo_transaccion": "Deposito"
+}
+
+### ─── TRANSACCIONES USUARIO (solo transferencias) ──────────
+POST {{api}}/transacciones/usuario
+Content-Type: application/json
+
+{
+  "nombre_completo": "Jaziel Armando Vargas Choque",
+  "tipo_transaccion": "Transferencia"
+}
+
 ### ─── CONSULTAR SALDOS ──────────────────────────────────────
 GET {{api}}/saldos/5851617743407592
 
-### ─── CONSULTAR TASAS ──────────────────────────────────────
+### ─── CONSULTAR TASAS ───────────────────────────────────────
 GET {{api}}/tasas
